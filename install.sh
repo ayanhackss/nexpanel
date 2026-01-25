@@ -1024,14 +1024,17 @@ cat > /etc/nginx/conf.d/tuning.conf << EOF
 # NexPanel Nginx Optimizations
 client_max_body_size 100M;
 client_body_timeout 60s;
-keepalive_timeout 65;
-gzip on;
-gzip_vary on;
-gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 EOF
 
 CREATED_FILES+=("/etc/nginx/conf.d/tuning.conf")
-systemctl restart nginx
+
+if nginx -t >/dev/null 2>&1; then
+    run_with_spinner "systemctl restart nginx" "Applying Nginx optimizations"
+else
+    print_warning "Nginx configuration conflict detected. Reverting optimization..."
+    rm -f /etc/nginx/conf.d/tuning.conf
+    run_with_spinner "systemctl restart nginx" "Restarting Nginx (default config)"
+fi
 print_success "Nginx optimized"
 
     save_state
