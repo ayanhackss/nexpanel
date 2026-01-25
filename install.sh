@@ -126,21 +126,47 @@ print_info() {
     echo -e "  ${BRIGHT_BLUE}ℹ${NC} ${DIM}$1${NC}"
 }
 
-spinner() {
-    local pid=$1
-    local message=$2
+run_with_spinner() {
+    local command="$1"
+    local message="$2"
+    local temp_log=$(mktemp)
+    
+    # Run command in background
+    eval "$command" > "$temp_log" 2>&1 &
+    local pid=$!
     local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     local i=0
-    local elapsed=0
+    
+    # Disable cursor
+    tput civis 2>/dev/null || true
     
     while kill -0 $pid 2>/dev/null; do
-        i=$(( (i+1) %10 ))
-        elapsed=$((elapsed + 1))
-        local seconds=$((elapsed / 10))
-        printf "\r${CYAN}${BOLD}${spin:$i:1}${NC} ${WHITE}${message}${NC} ${DIM}[${seconds}s]${NC}   "
+        i=$(( (i+1) % 10 ))
+        printf "\r  ${CYAN}${spin:$i:1}${NC} ${WHITE}${message}...${NC}"
         sleep 0.1
     done
-    printf "\r"
+    
+    wait $pid
+    local exit_code=$?
+    
+    # Enable cursor
+    tput cnorm 2>/dev/null || true
+    
+    # Clear line completely
+    printf "\r\033[K"
+    
+    if [ $exit_code -eq 0 ]; then
+        print_success "$message"
+        cat "$temp_log" >> "$LOG_FILE"
+        rm -f "$temp_log"
+        return 0
+    else
+        print_error "$message failed"
+        echo -e "${RED}Error log:${NC}"
+        cat "$temp_log" | tee -a "$LOG_FILE"
+        rm -f "$temp_log"
+        return $exit_code
+    fi
 }
 
 check_command() {
@@ -193,11 +219,9 @@ attempt_purge_recovery() {
     rm -rf /var/lib/mysql
     rm -rf /etc/mysql
     
-    print_info "Reinstalling MariaDB..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client" "Reinstalling MariaDB"
     
-    print_info "Starting service..."
-    systemctl enable --now mariadb 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "systemctl enable --now mariadb" "Starting service"
     sleep 5
     
     print_info "Securing fresh installation..."
@@ -530,13 +554,20 @@ else
 
 print_step "📦 Updating System Packages"
 
-echo -e "${WHITE}Refreshing package repositories...${NC}"
-apt-get update -qq -o Acquire::Languages=none -o Acquire::GzipIndexes=true 2>&1 | tee -a "$LOG_FILE" > /dev/null
-print_success "Package lists updated"
+run_with_spinner "apt-get update -qq -o Acquire::Languages=none -o Acquire::GzipIndexes=true" "Refreshing package repositories"
 
-echo -e "${WHITE}Upgrading system packages...${NC}"
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>&1 | tee -a "$LOG_FILE" > /dev/null
-print_success "System packages upgraded"
+echo ""
+echo -e "${YELLOW}Would you like to perform a full system upgrade? (Recommended for security)${NC}"
+echo -e "${DIM}Note: This may take a long time on some systems.${NC}"
+read -p "$(echo -e "${WHITE}Upgrade packages? [Y/n]: ${NC}")" -n 1 -r upgrade_choice
+echo ""
+echo ""
+
+if [[ $upgrade_choice =~ ^[Nn]$ ]]; then
+    print_warning "Skipping system upgrade. Ensure packages are up to date manually."
+else
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\"" "Upgrading system packages"
+fi
 echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 
     save_state
@@ -574,8 +605,7 @@ for package in "${CORE_PACKAGES[@]}"; do
 done
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${PACKAGES_TO_INSTALL[@]}" 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    print_success "Core packages installed: ${PACKAGES_TO_INSTALL[*]}"
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${PACKAGES_TO_INSTALL[*]}" "Installing core dependencies"
 else
     print_success "All core packages already installed"
 fi
@@ -595,9 +625,8 @@ print_step "🌐 Installing Nginx Web Server"
 if systemctl is-active --quiet nginx; then
     print_success "Nginx already running"
 else
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nginx 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    systemctl enable --now nginx 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    print_success "Nginx installed and started"
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nginx" "Installing Nginx"
+    run_with_spinner "systemctl enable --now nginx" "Starting Nginx"
 fi
 echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 fi
@@ -615,10 +644,8 @@ print_step "🗄️ Installing MariaDB Database"
 if systemctl is-active --quiet mariadb; then
     print_success "MariaDB already running"
 else
-    print_info "Installing MariaDB..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    systemctl enable --now mariadb 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    print_success "MariaDB installed and started"
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client" "Installing MariaDB"
+    run_with_spinner "systemctl enable --now mariadb" "Starting MariaDB"
 fi
 
 # Secure MariaDB
@@ -674,32 +701,52 @@ else
 
 print_step "🐘 Installing PHP-FPM (Multiple Versions)"
 
-print_info "Adding PHP repository..."
-LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php 2>&1 | tee -a "$LOG_FILE" > /dev/null
-apt-get update -qq -o Acquire::Languages=none 2>&1 | tee -a "$LOG_FILE" > /dev/null
-print_success "PHP repository added"
+    run_with_spinner "LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php" "Adding PHP repository"
+    run_with_spinner "apt-get update -qq -o Acquire::Languages=none" "Updating package lists"
 
-PHP_VERSIONS=("7.4" "8.0" "8.1" "8.2")
-PHP_EXTENSIONS=("fpm" "mysql" "curl" "gd" "mbstring" "xml" "zip" "bcmath")
+    echo ""
+    echo -e "${CYAN}Select PHP Installation Mode:${NC}"
+    echo -e "  ${GREEN}[1]${NC} Full Configuration (PHP 7.4, 8.0, 8.1, 8.2) - Best compatibility"
+    echo -e "  ${GREEN}[2]${NC} Modern Performance (PHP 8.2 only) - Fastest installation"
+    echo -e "  ${GREEN}[3]${NC} Balanced (PHP 7.4 + 8.2) - Legacy support + Performance"
+    echo ""
+    
+    read -p "$(echo -e "${WHITE}Enter choice [1-3] (Default: 1): ${NC}")" -n 1 -r php_choice
+    echo ""
+    echo ""
+    
+    case $php_choice in
+        2)
+            PHP_VERSIONS=("8.2")
+            print_info "Selected: Modern Performance (PHP 8.2)"
+            ;;
+        3)
+            PHP_VERSIONS=("7.4" "8.2")
+            print_info "Selected: Balanced (PHP 7.4 + 8.2)"
+            ;;
+        *)
+            PHP_VERSIONS=("7.4" "8.0" "8.1" "8.2")
+            print_info "Selected: Full Configuration (All versions)"
+            ;;
+    esac
 
-echo -e "${WHITE}Installing PHP versions (optimized batch install)...${NC}"
-PHP_PACKAGES=()
-PHP_PACKAGES=()
-for PHP_VER in "${PHP_VERSIONS[@]}"; do
-    for EXT in "${PHP_EXTENSIONS[@]}"; do
-        PHP_PACKAGES+=("php${PHP_VER}-${EXT}")
+    PHP_EXTENSIONS=("fpm" "mysql" "curl" "gd" "mbstring" "xml" "zip" "bcmath")
+
+    # Build package list
+    PHP_PACKAGES=()
+    for PHP_VER in "${PHP_VERSIONS[@]}"; do
+        for EXT in "${PHP_EXTENSIONS[@]}"; do
+            PHP_PACKAGES+=("php${PHP_VER}-${EXT}")
+        done
     done
-done
 
-# Install all PHP packages in one batch operation for maximum speed
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${PHP_PACKAGES[@]}" 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    # Install all PHP packages in one batch operation for maximum speed
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${PHP_PACKAGES[*]}" "Installing all PHP versions and extensions"
 
-# Enable and start all PHP-FPM services in parallel
-for PHP_VER in "${PHP_VERSIONS[@]}"; do
-    systemctl enable --now "php${PHP_VER}-fpm" 2>&1 | tee -a "$LOG_FILE" > /dev/null &
-done
-wait
-print_success "PHP 7.4, 8.0, 8.1, 8.2 installed"
+    # Enable and start all PHP-FPM services in parallel
+    run_with_spinner "for PHP_VER in ${PHP_VERSIONS[*]}; do systemctl enable --now php\${PHP_VER}-fpm & done; wait" "Starting PHP services"
+    
+    print_success "PHP 7.4, 8.0, 8.1, 8.2 installed"
 echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 fi
 
@@ -718,17 +765,15 @@ if command -v node &> /dev/null; then
     print_success "Node.js already installed: $NODE_VERSION"
 else
     echo -e "${WHITE}Installing Node.js...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nodejs 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "curl -fsSL https://deb.nodesource.com/setup_18.x | bash -" "Adding Node.js repository"
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nodejs" "Installing Node.js"
     print_success "Node.js $(node -v) installed"
 fi
 
 # Install PM2
 if ! command -v pm2 &> /dev/null; then
-    echo -e "${WHITE}Installing PM2...${NC}"
-    npm install -g pm2 --silent --no-progress 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    pm2 startup systemd -u root --hp /root 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    pm2 save 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "npm install -g pm2 --silent --no-progress" "Installing PM2"
+    run_with_spinner "pm2 startup systemd -u root --hp /root && pm2 save" "Configuring PM2"
     print_success "PM2 installed"
 else
     print_success "PM2 already installed"
@@ -758,11 +803,11 @@ for package in "${PYTHON_PACKAGES[@]}"; do
 done
 
 if [ ${#PYTHON_TO_INSTALL[@]} -gt 0 ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${PYTHON_TO_INSTALL[@]}" 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${PYTHON_TO_INSTALL[*]}" "Installing Python packages"
 fi
 
-pip3 install --upgrade pip --quiet --no-warn-script-location 2>&1 | tee -a "$LOG_FILE" > /dev/null
-pip3 install gunicorn uvicorn --quiet --no-warn-script-location 2>&1 | tee -a "$LOG_FILE" > /dev/null
+run_with_spinner "pip3 install --upgrade pip --quiet --no-warn-script-location" "Upgrading pip"
+run_with_spinner "pip3 install gunicorn uvicorn --quiet --no-warn-script-location" "Installing Python tools"
 print_success "Python tools installed"
     echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
     save_state
@@ -781,15 +826,13 @@ print_step "⚡ Installing Redis Cache Server"
 if systemctl is-active --quiet redis-server; then
     print_success "Redis already running"
 else
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends redis-server 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    systemctl enable --now redis-server 2>&1 | tee -a "$LOG_FILE" > /dev/null
-    print_success "Redis installed and started"
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends redis-server" "Installing Redis"
+    run_with_spinner "systemctl enable --now redis-server" "Starting Redis"
 fi
 
 # Install FTP server
 if ! systemctl is-active --quiet vsftpd; then
-    print_info "Installing VSFTPD..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends vsftpd 2>&1 | tee -a "$LOG_FILE" > /dev/null
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends vsftpd" "Installing VSFTPD"
     print_success "VSFTPD installed"
 else
     print_success "VSFTPD already installed"
