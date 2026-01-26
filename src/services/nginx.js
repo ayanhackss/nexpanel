@@ -2,11 +2,15 @@ const fs = require('fs').promises;
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const { isValidWebsiteName, isValidDomain } = require('../utils/validation');
 
 const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED = '/etc/nginx/sites-enabled';
 
 const createVhost = async (websiteId, name, domain, runtime, phpVersion, port) => {
+    if (!isValidWebsiteName(name)) throw new Error('Invalid website name');
+    if (!isValidDomain(domain)) throw new Error('Invalid domain');
+
     let template;
 
     if (runtime === 'php') {

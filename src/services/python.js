@@ -1,20 +1,30 @@
+const { spawnAsync } = require('../utils/process');
+const { isValidWebsiteName } = require('../utils/validation');
 const fs = require('fs').promises;
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
 
 const start = async (website) => {
+    if (!isValidWebsiteName(website.name)) throw new Error('Invalid website name');
+
     const appPath = `/var/www/${website.name}`;
     const venvPath = `${appPath}/venv`;
     const appName = website.name;
 
     try {
         // Create virtualenv if not exists
-        await execAsync(`test -d ${venvPath} || python3 -m venv ${venvPath}`);
+        try {
+            await fs.access(venvPath);
+        } catch {
+            await spawnAsync('python3', ['-m', 'venv', venvPath]);
+        }
 
         // Install requirements
         const reqFile = `${appPath}/requirements.txt`;
-        await execAsync(`test -f ${reqFile} && ${venvPath}/bin/pip install -r ${reqFile}`);
+        try {
+            await fs.access(reqFile);
+            await spawnAsync(`${venvPath}/bin/pip`, ['install', '-r', reqFile]);
+        } catch (e) {
+            // No requirements.txt or install failed (but we continue)
+        }
 
         // Detect framework and start
         const framework = await detectFramework(appPath);
@@ -29,9 +39,13 @@ const start = async (website) => {
             startCommand = `${venvPath}/bin/uvicorn main:app --host 127.0.0.1 --port ${website.port} --workers 2`;
         }
 
+        // Create start script to avoid shell parsing issues with pm2 + arguments
+        const startScriptPath = `${appPath}/start.sh`;
+        await fs.writeFile(startScriptPath, `#!/bin/bash\n${startCommand}`, { mode: 0o755 });
+
         // Start with PM2
-        await execAsync(`cd ${appPath} && pm2 start "${startCommand}" --name ${appName}`);
-        await execAsync(`pm2 save`);
+        await spawnAsync('pm2', ['start', startScriptPath, '--name', appName]);
+        await spawnAsync('pm2', ['save']);
 
         return true;
     } catch (error) {
@@ -40,9 +54,10 @@ const start = async (website) => {
 };
 
 const stop = async (website) => {
+    if (!isValidWebsiteName(website.name)) throw new Error('Invalid website name');
     try {
-        await execAsync(`pm2 delete ${website.name}`);
-        await execAsync(`pm2 save`);
+        await spawnAsync('pm2', ['delete', website.name]);
+        await spawnAsync('pm2', ['save']);
         return true;
     } catch (error) {
         throw new Error(`Failed to stop Python app: ${error.message}`);
@@ -50,8 +65,9 @@ const stop = async (website) => {
 };
 
 const restart = async (website) => {
+    if (!isValidWebsiteName(website.name)) throw new Error('Invalid website name');
     try {
-        await execAsync(`pm2 restart ${website.name}`);
+        await spawnAsync('pm2', ['restart', website.name]);
         return true;
     } catch (error) {
         throw new Error(`Failed to restart Python app: ${error.message}`);
@@ -60,11 +76,15 @@ const restart = async (website) => {
 
 const detectFramework = async (appPath) => {
     try {
-        const { stdout } = await execAsync(`grep -l "django\\|Django" ${appPath}/*.py 2>/dev/null || echo ""`);
-        if (stdout) return 'django';
+        try {
+            const { stdout } = await spawnAsync('grep', ['-r', '-l', '-e', 'django\\|Django', appPath]);
+            if (stdout) return 'django';
+        } catch {}
 
-        const { stdout: flask } = await execAsync(`grep -l "flask\\|Flask" ${appPath}/*.py 2>/dev/null || echo ""`);
-        if (flask) return 'flask';
+        try {
+            const { stdout } = await spawnAsync('grep', ['-r', '-l', '-e', 'flask\\|Flask', appPath]);
+            if (stdout) return 'flask';
+        } catch {}
 
         return 'fastapi';
     } catch {

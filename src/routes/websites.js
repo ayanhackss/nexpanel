@@ -4,6 +4,9 @@ const nginxService = require('../services/nginx');
 const phpFpmService = require('../services/php-fpm');
 const nodejsService = require('../services/nodejs');
 const pythonService = require('../services/python');
+const { isValidWebsiteName, isValidDomain } = require('../utils/validation');
+const { spawnAsync } = require('../utils/process');
+const fs = require('fs').promises;
 
 async function websitesRoutes(fastify, options) {
 
@@ -27,9 +30,23 @@ async function websitesRoutes(fastify, options) {
         const { name, domain, runtime, php_version } = request.body;
 
         try {
+            // Validate inputs
+            if (!isValidWebsiteName(name)) {
+                return reply.code(400).send({ error: 'Invalid website name. Use only alphanumeric characters, hyphens, and underscores (3-63 chars).' });
+            }
+            if (!isValidDomain(domain)) {
+                return reply.code(400).send({ error: 'Invalid domain format.' });
+            }
+
             // Validate runtime
             if (!['php', 'nodejs', 'python'].includes(runtime)) {
                 return reply.code(400).send({ error: 'Invalid runtime' });
+            }
+
+            // Check if name already exists
+            const existing = sqliteDb.prepare('SELECT id FROM websites WHERE name = ? OR domain = ?').get(name, domain);
+            if (existing) {
+                return reply.code(409).send({ error: 'Website name or domain already exists' });
             }
 
             // Allocate port for Node.js/Python
@@ -48,8 +65,11 @@ async function websitesRoutes(fastify, options) {
 
             // Create directory
             const websiteDir = `/var/www/${name}`;
-            await execCommand(`mkdir -p ${websiteDir}`);
-            await execCommand(`chown www-data:www-data ${websiteDir}`);
+            // Use fs.mkdir instead of shell command to avoid injection (even though name is validated)
+            await fs.mkdir(websiteDir, { recursive: true });
+
+            // For chown, use spawnAsync to avoid shell
+            await spawnAsync('chown', ['www-data:www-data', websiteDir]);
 
             // Generate Nginx config
             await nginxService.createVhost(websiteId, name, domain, runtime, php_version, port);
@@ -155,15 +175,6 @@ async function websitesRoutes(fastify, options) {
 }
 
 // Helper functions
-const execCommand = (cmd) => {
-    return new Promise((resolve, reject) => {
-        require('child_process').exec(cmd, (error, stdout, stderr) => {
-            if (error) reject(error);
-            else resolve(stdout);
-        });
-    });
-};
-
 const allocatePort = async () => {
     const usedPorts = sqliteDb.prepare('SELECT port FROM websites WHERE port IS NOT NULL').all().map(w => w.port);
     let port = 3000;
