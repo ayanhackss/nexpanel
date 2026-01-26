@@ -1064,7 +1064,8 @@ EOF
 
 CREATED_FILES+=("/etc/systemd/system/nexpanel.service")
 systemctl daemon-reload
-print_success "Systemd service created"
+run_with_spinner "systemctl enable --now nexpanel" "Starting NexPanel service"
+print_success "Systemd service created and started"
 
     save_state
 fi
