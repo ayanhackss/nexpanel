@@ -268,7 +268,7 @@ setup_cloudflared() {
     echo -e "${WHITE}you can use Cloudflare Tunnel to expose the panel securely.${NC}"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}${BOLD}Do you want to setup Cloudflare Tunnel now? [y/N]${NC} ")" -n 1 -r choice
+    read -p "$(echo -e "${YELLOW}${BOLD}Do you want to setup Cloudflare Tunnel now? (Press 'n' if you don't have a token) [y/N]${NC} ")" -n 1 -r choice
     echo ""
     if [[ ! $choice =~ ^[Yy]$ ]]; then
         return 0
@@ -1346,8 +1346,13 @@ echo -e "${PURPLE}${BOLD}╔═════════════════�
 echo -e "${PURPLE}${BOLD}║${NC}  ${WHITE}${BOLD}🚀 NEXT STEPS${NC}                                                    ${PURPLE}${BOLD}║${NC}"
 echo -e "${PURPLE}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${YELLOW}${BOLD}3.${NC} Access your panel:"
-echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC}"
+echo -e "  ${YELLOW}${BOLD}1.${NC} Access your panel:"
+if systemctl is-active --quiet cloudflared; then
+    echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}https://<your-tunnel-domain>${NC} ${DIM}(Cloudflare Tunnel)${NC}"
+    echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC} ${DIM}(Direct IP)${NC}"
+else
+    echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC}"
+fi
 echo ""
 
 echo -e "${BLUE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
