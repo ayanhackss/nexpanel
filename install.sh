@@ -440,10 +440,37 @@ trap cleanup_on_failure EXIT
 
 
 #############################################
-# Pre-Installation Checks
+# Pre-Installation Checks & Setup
 #############################################
 
 print_banner
+
+# Timezone Setup
+echo -ne "  ${BRIGHT_CYAN}▸${NC} Checking System Timezone... "
+CURRENT_TZ=$(timedatectl show --property=Timezone --value)
+echo -e "${WHITE}$CURRENT_TZ${NC}"
+echo -e "  ${YELLOW}Would you like to change the timezone? [y/N]${NC}"
+read -p "  " -n 1 -r tz_response
+echo ""
+if [[ $tz_response =~ ^[Yy]$ ]]; then
+    # Interactive timezone selection
+    dpkg-reconfigure tzdata
+    echo -e "  ${GREEN}✓${NC} ${WHITE}Timezone updated to: $(timedatectl show --property=Timezone --value)${NC}"
+else
+    echo -e "  ${GREEN}✓${NC} Using existing timezone"
+fi
+echo ""
+
+# Remove Bloatware
+echo -e "${YELLOW}Clean up conflicting packages (Apache2, Snapd)? [Y/n]${NC}"
+read -p "  " -n 1 -r bloat_response
+echo ""
+if [[ ! $bloat_response =~ ^[Nn]$ ]]; then
+    print_info "Removing conflicting packages..."
+    run_with_spinner "apt-get remove -y apache2 apache2-* snapd && apt-get autoremove -y" "Cleaning system bloat"
+    print_success "System cleaned"
+fi
+echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 
 # Check for previous installation and offer resume
 RESUMING=false
@@ -542,6 +569,32 @@ echo ""
     echo -e "${BRIGHT_GREEN}║${NC}  ${BRIGHT_GREEN}✓  All Pre-Installation Checks Passed!${NC}                          ${BRIGHT_GREEN}║${NC}"
     echo -e "${BRIGHT_GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
     save_state
+    save_state
+fi
+
+# Check for Low RAM & Create Swap
+if [ "$TOTAL_RAM" -lt 2000 ]; then
+    echo ""
+    print_warning "Low RAM detected ($TOTAL_RAM MB). System stability may be affected."
+    
+    # Check if swap exists
+    if [ $(swapon --show | wc -l) -eq 0 ]; then
+        print_info "Creating 2GB swap file for better stability..."
+        run_with_spinner "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile" "Configuring Swap"
+        
+        # Make permanent
+        if ! grep -q "/swapfile" /etc/fstab; then
+            echo "/swapfile none swap sw 0 0" >> /etc/fstab
+        fi
+        
+        # Optimize swap settings
+        sysctl vm.swappiness=10 &> /dev/null
+        echo "vm.swappiness=10" >> /etc/sysctl.conf
+        
+        print_success "2GB Swap file created and enabled"
+    else
+        print_success "Swap file already active"
+    fi
 fi
 
 #############################################
@@ -609,6 +662,46 @@ if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
 else
     print_success "All core packages already installed"
 fi
+
+# Configure Fail2Ban
+print_info "Configuring Fail2Ban protection..."
+if [ ! -d "/etc/fail2ban/jail.d" ]; then
+    mkdir -p /etc/fail2ban/jail.d
+fi
+
+cat > /etc/fail2ban/jail.d/nexpanel.conf << EOF
+[nexpanel]
+enabled = true
+port = 8080
+filter = nexpanel
+logpath = /opt/nexpanel/logs/access.log
+maxretry = 5
+findtime = 600
+bantime = 3600
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 5
+findtime = 600
+bantime = 3600
+EOF
+
+# Create filter
+if [ ! -d "/etc/fail2ban/filter.d" ]; then
+    mkdir -p /etc/fail2ban/filter.d
+fi
+
+cat > /etc/fail2ban/filter.d/nexpanel.conf << EOF
+[Definition]
+failregex = ^<HOST> -.*POST /auth/login.*401.*$
+ignoreregex =
+EOF
+
+systemctl restart fail2ban
+print_success "Fail2Ban configured (SSH + Panel protection)"
 echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 fi
 
@@ -878,23 +971,23 @@ print_info "Creating directory: $PANEL_DIR"
 mkdir -p "$PANEL_DIR"
 cd "$PANEL_DIR"
 
-# Create package.json
-cat > package.json << 'EOF'
-{
-  "name": "nexpanel",
-  "version": "1.0.0",
-  "description": "NexPanel - Next-generation hosting management",
-  "scripts": {
-    "start": "node src/server.js"
-  }
-}
-EOF
+# Clone repository
+print_info "Downloading NexPanel source code..."
+rm -rf "$PANEL_DIR"
+git clone https://github.com/ayanhackss/nexpanel.git "$PANEL_DIR"
+cd "$PANEL_DIR"
+
+# Install dependencies
+print_info "Installing application dependencies..."
+run_with_spinner "npm install --production" "Installing npm packages"
+print_success "Dependencies installed"
 
 # Create data directories
 mkdir -p "$PANEL_DIR/data"
 mkdir -p /var/www
 print_success "NexPanel directories created"
 
+    echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
     save_state
 fi
 
@@ -1044,6 +1137,52 @@ print_success "Nginx optimized"
     save_state
 fi
 
+# Setup SSH Banner (MOTD)
+print_info "Setting up SSH Banner..."
+rm -f /etc/update-motd.d/*
+cat > /etc/update-motd.d/99-nexpanel << 'EOF'
+#!/bin/bash
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+# System Stats
+UPTIME=$(uptime -p | sed 's/up //')
+LOAD=$(cat /proc/loadavg | awk '{print $1" "$2" "$3}')
+MEMORY=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
+DISK=$(df -h / | awk '$NF=="/"{printf "%s", $5}')
+IP=$(hostname -I | cut -d' ' -f1)
+
+clear
+echo -e "${CYAN}${BOLD}"
+cat << "BANNER"
+   _   _           ____                  _ 
+  | \ | | _____  _|  _ \ __ _ _ __   ___| |
+  |  \| |/ _ \ \/ / |_) / _` | '_ \ / _ \ |
+  | |\  |  __/>  <|  __/ (_| | | | |  __/ |
+  |_| \_|\___/_/\_\_|   \__,_|_| |_|\___|_|
+                                           
+BANNER
+echo -e "${NC}"
+echo -e "  ${YELLOW}Welcome to NexPanel Server${NC}"
+echo -e "  ${DIM}──────────────────────────────────────────────────${NC}"
+echo -e "  ${BLUE}System IP:${NC}    ${WHITE}$IP${NC}"
+echo -e "  ${BLUE}Panel URL:${NC}    ${WHITE}http://$IP:8080${NC}"
+echo -e "  ${DIM}──────────────────────────────────────────────────${NC}"
+echo -e "  ${GREEN}System Load:${NC}  $LOAD"
+echo -e "  ${GREEN}Memory Usage:${NC} $MEMORY"
+echo -e "  ${GREEN}Disk Usage:${NC}   $DISK"
+echo -e "  ${GREEN}Uptime:${NC}       $UPTIME"
+echo -e "  ${DIM}──────────────────────────────────────────────────${NC}"
+echo ""
+EOF
+chmod +x /etc/update-motd.d/99-nexpanel
+print_success "Professional SSH banner verified"
+
 #############################################
 # Health Checks
 #############################################
@@ -1101,7 +1240,29 @@ if [ "$ALL_HEALTHY" = true ]; then
 else
     echo -e "  ${YELLOW}${BOLD}⚠${NC} ${YELLOW}Some services may need attention${NC}"
     echo -e "  ${YELLOW}${BOLD}ℹ${NC} ${YELLOW}Check logs for details${NC}"
+    echo -e "  ${YELLOW}${BOLD}⚠${NC} ${YELLOW}Some services may need attention${NC}"
+    echo -e "  ${YELLOW}${BOLD}ℹ${NC} ${YELLOW}Check logs for details${NC}"
 fi
+
+echo ""
+echo -e "${BRIGHT_BLUE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BRIGHT_BLUE}${BOLD}║${NC}  ${WHITE}${BOLD}🛡️ FIREWALL & PORT STATUS${NC}                                         ${BRIGHT_BLUE}${BOLD}║${NC}"
+echo -e "${BRIGHT_BLUE}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+check_port() {
+    local port=$1
+    local name=$2
+    if ufw status | grep -q "$port/tcp.*ALLOW"; then
+        echo -e "  ${BRIGHT_GREEN}✓${NC} ${WHITE}Port $port ($name):${NC}    ${BRIGHT_GREEN}ALLOWED${NC}"
+    else
+        echo -e "  ${RED}✗${NC} ${WHITE}Port $port ($name):${NC}    ${RED}BLOCKED${NC}"
+    fi
+}
+
+check_port "80" "HTTP"
+check_port "443" "HTTPS"
+check_port "8080" "Panel"
 
 echo ""
 echo -e "${BRIGHT_CYAN}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
@@ -1120,17 +1281,8 @@ echo -e "${PURPLE}${BOLD}╔═════════════════�
 echo -e "${PURPLE}${BOLD}║${NC}  ${WHITE}${BOLD}🚀 NEXT STEPS${NC}                                                    ${PURPLE}${BOLD}║${NC}"
 echo -e "${PURPLE}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${YELLOW}${BOLD}1.${NC} Copy panel source code:"
-echo -e "     ${DIM}→${NC} ${WHITE}git clone https://github.com/ayanhackss/nexpanel.git /opt/nexpanel${NC}"
-echo ""
-echo -e "  ${YELLOW}${BOLD}2.${NC} Install dependencies:"
-echo -e "     ${DIM}→${NC} ${WHITE}cd /opt/nexpanel && npm install${NC}"
-echo ""
-echo -e "  ${YELLOW}${BOLD}3.${NC} Start the panel:"
-echo -e "     ${DIM}→${NC} ${WHITE}systemctl start nexpanel${NC}"
-echo ""
-echo -e "  ${YELLOW}${BOLD}4.${NC} Access your panel:"
-echo -e "     ${DIM}→${NC} ${WHITE}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC}"
+echo -e "  ${YELLOW}${BOLD}3.${NC} Access your panel:"
+echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC}"
 echo ""
 
 echo -e "${BLUE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
