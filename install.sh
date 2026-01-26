@@ -445,32 +445,7 @@ trap cleanup_on_failure EXIT
 
 print_banner
 
-# Timezone Setup
-echo -ne "  ${BRIGHT_CYAN}▸${NC} Checking System Timezone... "
-CURRENT_TZ=$(timedatectl show --property=Timezone --value)
-echo -e "${WHITE}$CURRENT_TZ${NC}"
-echo -e "  ${YELLOW}Would you like to change the timezone? [y/N]${NC}"
-read -p "  " -n 1 -r tz_response
-echo ""
-if [[ $tz_response =~ ^[Yy]$ ]]; then
-    # Interactive timezone selection
-    dpkg-reconfigure tzdata
-    echo -e "  ${GREEN}✓${NC} ${WHITE}Timezone updated to: $(timedatectl show --property=Timezone --value)${NC}"
-else
-    echo -e "  ${GREEN}✓${NC} Using existing timezone"
-fi
-echo ""
 
-# Remove Bloatware
-echo -e "${YELLOW}Clean up conflicting packages (Apache2, Snapd)? [Y/n]${NC}"
-read -p "  " -n 1 -r bloat_response
-echo ""
-if [[ ! $bloat_response =~ ^[Nn]$ ]]; then
-    print_info "Removing conflicting packages..."
-    run_with_spinner "apt-get remove -y apache2 apache2-* snapd && apt-get autoremove -y" "Cleaning system bloat"
-    print_success "System cleaned"
-fi
-echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
 
 # Check for previous installation and offer resume
 RESUMING=false
@@ -968,8 +943,7 @@ print_step "🚀 Installing NexPanel Application"
 
 PANEL_DIR="/opt/nexpanel"
 print_info "Creating directory: $PANEL_DIR"
-mkdir -p "$PANEL_DIR"
-cd "$PANEL_DIR"
+cd /opt
 
 # Clone repository
 print_info "Downloading NexPanel source code..."
