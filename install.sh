@@ -233,6 +233,68 @@ attempt_purge_recovery() {
     print_success "MariaDB purged and secured successfully."
 }
 
+setup_cloudflared() {
+    print_info "Checking Cloudflare Tunnel configuration..."
+    
+    if ! command -v cloudflared &> /dev/null; then
+        print_info "Installing Cloudflare Tunnel (cloudflared)..."
+        # Create directory for the package
+        mkdir -p /tmp/cloudflared
+        cd /tmp/cloudflared
+        
+        # Download the latest deb package
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        
+        # Install it
+        dpkg -i cloudflared-linux-amd64.deb >/dev/null 2>&1
+        cd - >/dev/null
+        
+        if command -v cloudflared &> /dev/null; then
+            print_success "Cloudflare Tunnel installed successfully"
+        else
+            print_error "Failed to install Cloudflare Tunnel"
+            return 1
+        fi
+    else
+        print_success "Cloudflare Tunnel is already installed"
+    fi
+    
+    echo ""
+    echo -e "${BRIGHT_CYAN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BRIGHT_CYAN}║${NC}  ${WHITE}${BOLD}☁️  CLOUDFLARE TUNNEL SETUP${NC}                                        ${BRIGHT_CYAN}║${NC}"
+    echo -e "${BRIGHT_CYAN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${WHITE}If your server is behind a NAT or has firewall restrictions,${NC}"
+    echo -e "${WHITE}you can use Cloudflare Tunnel to expose the panel securely.${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}${BOLD}Do you want to setup Cloudflare Tunnel now? [y/N]${NC} ")" -n 1 -r choice
+    echo ""
+    if [[ ! $choice =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    
+    echo ""
+    echo -e "${WHITE}Please enter your Cloudflare Tunnel Token:${NC}"
+    echo -e "${DIM}(You can get this from the Cloudflare Zero Trust Dashboard)${NC}"
+    read -p "Token: " token
+    
+    if [ -n "$token" ]; then
+        print_info "Configuring tunnel service..."
+        cloudflared service uninstall >/dev/null 2>&1 || true
+        if cloudflared service install "$token" >/dev/null 2>&1; then
+            print_success "Cloudflare Tunnel service installed"
+            print_info "Starting tunnel..."
+            systemctl start cloudflared
+            print_success "Cloudflare Tunnel is active!"
+        else
+            print_error "Failed to install tunnel service. Check your token."
+        fi
+    else
+        print_warning "No token provided. Skipping setup."
+    fi
+}
+
 detect_previous_installation() {
     local components_found=0
     local components_status=""
@@ -958,6 +1020,7 @@ print_success "Dependencies installed"
 
 # Create data directories
 mkdir -p "$PANEL_DIR/data"
+mkdir -p "$PANEL_DIR/src/public"
 mkdir -p /var/www
 print_success "NexPanel directories created"
 
@@ -1098,6 +1161,29 @@ gzip_types text/plain text/css application/json application/javascript text/xml 
 EOF
 
 CREATED_FILES+=("/etc/nginx/conf.d/tuning.conf")
+
+# Configure Reverse Proxy
+print_info "Configuring Nginx Reverse Proxy..."
+backup_file "/etc/nginx/sites-available/nexpanel"
+cat > /etc/nginx/sites-available/nexpanel << 'EOF'
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+ln -sf /etc/nginx/sites-available/nexpanel /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+print_success "Nginx Reverse Proxy Configured (Port 80 -> 8080)"
 
 if nginx -t >/dev/null 2>&1; then
     run_with_spinner "systemctl restart nginx" "Applying Nginx optimizations"
@@ -1250,6 +1336,10 @@ echo ""
 echo -e "  ${RED}${BOLD}⚠ IMPORTANT:${NC} Save these credentials securely!"
 echo -e "  ${DIM}Credentials saved to: /root/nexpanel-credentials.txt${NC}"
 echo ""
+
+
+# Offer Cloudflare Tunnel Setup
+setup_cloudflared
 
 echo -e "${PURPLE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${PURPLE}${BOLD}║${NC}  ${WHITE}${BOLD}🚀 NEXT STEPS${NC}                                                    ${PURPLE}${BOLD}║${NC}"
