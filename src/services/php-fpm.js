@@ -2,10 +2,13 @@ const fs = require('fs').promises;
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const { isValidWebsiteName } = require('../utils/validation');
 
 const PHP_FPM_POOL_DIR = '/etc/php';
 
 const createPool = async (name, phpVersion) => {
+    if (!isValidWebsiteName(name)) throw new Error('Invalid website name');
+
     const poolConfig = generatePoolConfig(name, phpVersion);
     const poolPath = `${PHP_FPM_POOL_DIR}/${phpVersion}/fpm/pool.d/${name}.conf`;
 

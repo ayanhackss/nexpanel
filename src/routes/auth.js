@@ -87,6 +87,9 @@ async function authRoutes(fastify, options) {
 
         const { secret, qrCode } = await totpService.generateSecret(user.username);
 
+        // Store secret in session temporarily
+        request.session.temp_totp_secret = secret;
+
         return reply.view('setup-2fa.ejs', { qrCode, secret });
     });
 
@@ -96,7 +99,13 @@ async function authRoutes(fastify, options) {
             return reply.code(401).send({ error: 'Unauthorized' });
         }
 
-        const { secret, token } = request.body;
+        const { token } = request.body;
+        const secret = request.session.temp_totp_secret;
+
+        if (!secret) {
+            return reply.code(400).send({ error: '2FA setup session expired or invalid' });
+        }
+
         const valid = totpService.verifyToken(secret, token);
 
         if (!valid) {
@@ -110,6 +119,9 @@ async function authRoutes(fastify, options) {
       SET totp_secret = ?, totp_enabled = 1, backup_codes = ?
       WHERE id = ?
     `).run(secret, JSON.stringify(backupCodes), request.session.user.id);
+
+        // Clear temp secret
+        request.session.temp_totp_secret = null;
 
         return reply.send({ success: true, backupCodes });
     });
