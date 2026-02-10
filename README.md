@@ -67,11 +67,11 @@ The installer features a beautiful, modern interface:
 ║   🚀  Next-Generation Hosting Management Panel  🚀                       ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 
-╔════════════════════════════════════════════════════════════════════╗
+╔════════════════════════════════════════════════════════════════════════════╗
 ║ Step 1/12 │ 🔍 Pre-Installation Checks
-╠════════════════════════════════════════════════════════════════════╣
+╠════════════════════════════════════════════════════════════════════════════╣
 ║ ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 8%
-╚════════════════════════════════════════════════════════════════════╝
+╚════════════════════════════════════════════════════════════════════════════╝
 
   ✓ Checking root privileges... ✓
   ✓ Detecting operating system... ✓
@@ -80,9 +80,9 @@ The installer features a beautiful, modern interface:
   ✓ Disk: 50GB available
   ✓ Internet connection active
 
-╔════════════════════════════════════════════════════════════════════╗
+╔════════════════════════════════════════════════════════════════════════════╗
 ║  ✓  All Pre-Installation Checks Passed!                            ║
-╚════════════════════════════════════════════════════════════════════╝
+╚════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ### Manual Installation
@@ -95,11 +95,23 @@ cd nexpanel
 # Install dependencies
 npm install
 
-# Create data directory
-mkdir -p data
+# Setup admin user (creates database and admin account)
+npm run setup:admin
 
 # Start the panel
 npm start
+```
+
+### Docker Installation
+
+```bash
+# Build and run with Docker
+docker build -t nexpanel .
+docker run -d -p 8080:8080 \
+  -v nexpanel_data:/data \
+  -v /var/www:/var/www \
+  --restart unless-stopped \
+  nexpanel
 ```
 
 ## 🎯 Quick Start
@@ -111,7 +123,7 @@ npm start
 
 2. **Login**
    - Username: `admin`
-   - Password: (provided after installation)
+   - Password: (provided after installation/setup)
 
 3. **Create Your First Website**
    - Go to "Websites" → "Create New"
@@ -144,6 +156,32 @@ npm start
 - **Error Handling**: Comprehensive error detection and reporting
 - **State Tracking**: Saves progress for potential resume
 
+## 🗑️ Uninstallation
+
+To completely remove NexPanel from your system with beautiful UI:
+
+```bash
+# Download and run the uninstaller
+bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uninstall.sh)
+```
+
+Or if you have the source locally:
+
+```bash
+chmod +x uninstall.sh
+sudo ./uninstall.sh
+```
+
+**✨ Uninstaller Features:**
+- 🎨 Beautiful modern UI with colored boxes and progress bars
+- ⚡ Fast execution (~15-30 seconds)
+- 🛡️ Confirmation prompt before removal
+- 📊 Step-by-step progress tracking
+- ✅ Visual feedback for each action
+- 🔄 Handles all NexPanel components automatically
+
+**Note:** This does not remove Node.js, MariaDB, or other system packages that were installed as dependencies.
+
 ## 📚 Documentation
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Ubuntu Tuning Guide](docs/UBUNTU_TUNING.md)
@@ -162,12 +200,16 @@ npm start
 
 ## 🎛️ System Management
 
-### Service Control
+### Panel Service
 
 ```bash
-# Panel service
+# Check status
 systemctl status nexpanel
+
+# Restart
 systemctl restart nexpanel
+
+# Stop
 systemctl stop nexpanel
 
 # View logs
@@ -182,6 +224,21 @@ The panel enforces strict resource limits:
 - PHP-FPM: max 5 children per pool
 - Node.js apps: max 256MB memory
 - Aggressive log rotation
+
+### Manual Admin Setup
+
+If you need to reset the admin password:
+
+```bash
+cd /path/to/nexpanel
+npm run setup:admin -- --username admin --password YourNewPassword
+```
+
+Or generate a random password:
+
+```bash
+npm run setup:admin
+```
 
 ## 🏗️ Technology Stack
 
