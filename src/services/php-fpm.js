@@ -5,6 +5,15 @@ const execAsync = promisify(exec);
 
 const PHP_FPM_POOL_DIR = '/etc/php';
 
+const reloadPool = async (name, phpVersion = '8.2') => {
+    try {
+        await execAsync(`systemctl reload php${phpVersion}-fpm`);
+        return true;
+    } catch (error) {
+        throw new Error(`Failed to reload PHP-FPM pool: ${error.message}`);
+    }
+};
+
 const createPool = async (name, phpVersion) => {
     const poolConfig = generatePoolConfig(name, phpVersion);
     const poolPath = `${PHP_FPM_POOL_DIR}/${phpVersion}/fpm/pool.d/${name}.conf`;
@@ -61,5 +70,6 @@ chdir = /var/www/${name}
 module.exports = {
     createPool,
     removePool,
-    switchVersion
+    switchVersion,
+    reloadPool
 };

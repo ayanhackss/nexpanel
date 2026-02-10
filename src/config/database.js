@@ -16,6 +16,9 @@ const mariaPool = mysql.createPool({
 // SQLite for panel metadata
 const sqliteDb = new Database(path.join(__dirname, '../../data/panel.db'));
 
+// Enable foreign key constraints
+sqliteDb.pragma('foreign_keys = ON');
+
 // Initialize SQLite schema
 const initSqlite = () => {
     sqliteDb.exec(`

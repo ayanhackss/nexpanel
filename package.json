@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "setup": "node scripts/setup.js"
+    "setup": "node src/scripts/setup-admin.js",
+    "setup:admin": "node src/scripts/setup-admin.js"
   },
   "keywords": [
     "hosting",

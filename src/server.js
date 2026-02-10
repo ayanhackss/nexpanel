@@ -2,6 +2,13 @@ const fastify = require('fastify')({ logger: true });
 const path = require('path');
 const fs = require('fs');
 
+// Ensure data directory exists
+const dataDir = path.join(__dirname, '../data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log('✓ Created data directory');
+}
+
 // Security plugins
 fastify.register(require('@fastify/helmet'), {
   contentSecurityPolicy: {
@@ -23,7 +30,7 @@ fastify.register(require('@fastify/rate-limit'), {
 // Cookie and session support
 fastify.register(require('@fastify/cookie'));
 fastify.register(require('@fastify/session'), {
-  secret: process.env.SESSION_SECRET || 'change-this-secret-in-production-min-32-chars-long',
+  secret: process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? require('crypto').randomBytes(64).toString('hex') : 'change-this-secret-in-production-min-32-chars-long'),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
