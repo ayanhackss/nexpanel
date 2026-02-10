@@ -220,8 +220,8 @@ echo ""
 PACKAGES_REMOVED=false
 
 if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
-    # Stop services first
-    run_with_spinner "systemctl stop nginx mariadb php*-fpm redis-server vsftpd" "Stopping system services"
+    # Stop services first (Force stop to prevent hangs)
+    run_with_spinner "timeout 10s systemctl stop nginx mariadb php*-fpm redis-server vsftpd || (pkill -9 -f nginx; pkill -9 -f mysqld; pkill -9 -f php-fpm; pkill -9 -f redis; pkill -9 -f vsftpd) || true" "Stopping system services"
     
     # Remove PM2 and global npm packages (Do this BEFORE removing Node.js)
     if command -v npm &> /dev/null; then
