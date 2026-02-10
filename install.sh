@@ -673,12 +673,20 @@ else
 
 print_step "🔧 Installing Core Dependencies"
 
+# 1. Install software-properties-common first (needed for add-apt-repository)
+if ! dpkg -s software-properties-common >/dev/null 2>&1; then
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common" "Installing software-properties-common"
+fi
+
+# 2. Enable universe repository (needed for certbot/python3-certbot-nginx)
+run_with_spinner "add-apt-repository universe -y" "Enabling universe repository"
+run_with_spinner "apt-get update -qq" "Updating package lists"
+
 CORE_PACKAGES=(
     "curl"
     "wget"
     "git"
     "unzip"
-    "software-properties-common"
     "build-essential"
     "ufw"
     "fail2ban"
@@ -695,6 +703,10 @@ for package in "${CORE_PACKAGES[@]}"; do
 done
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
+    # Try to fix broken installs first
+    dpkg --configure -a >/dev/null 2>&1
+    apt-get --fix-broken install -y >/dev/null 2>&1
+    
     run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${PACKAGES_TO_INSTALL[*]}" "Installing core dependencies"
 else
     print_success "All core packages already installed"
