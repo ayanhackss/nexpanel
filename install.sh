@@ -752,8 +752,16 @@ else
     fi
 
     # 3. Clean incomplete package states
-    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
-    dpkg --configure -a >/dev/null 2>&1
+    # Kill any running apt/dpkg processes first
+    pkill -9 apt-get 2>/dev/null || true
+    pkill -9 dpkg 2>/dev/null || true
+    pkill -9 apt 2>/dev/null || true
+    
+    # Remove locks
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock
+    
+    # Configure any pending packages (allow failure)
+    dpkg --configure -a >/dev/null 2>&1 || true
 
     # Now run the install cleanly
     run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client" "Installing MariaDB"
