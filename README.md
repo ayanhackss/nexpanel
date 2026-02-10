@@ -37,25 +37,8 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 ### ⚡ One-Command Install (2-3 minutes)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh || wget -qO- https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh)
 ```
-
-**✨ Beautiful Modern Installer:**
-- 🎨 Sleek, colorful UI with progress bars
-- ⚡ Optimized for speed (~60% faster)
-- 🛡️ Automatic rollback on failure
-- 📊 Real-time progress tracking
-- ✅ Smart connectivity detection
-
-**What it does:**
-1. ✅ Validates system requirements (OS, RAM, disk, internet)
-2. ✅ Installs all dependencies (Nginx, PHP 7.4-8.2, Node.js 18, Python, MariaDB, Redis)
-3. ✅ Configures services with production-optimized settings
-4. ✅ Sets up firewall (UFW) with secure defaults
-5. ✅ Creates admin account with strong password
-6. ✅ Displays login credentials and next steps
-
-**Installation Time:** ~2-3 minutes on a fresh Ubuntu system
 
 ### 📸 Installation Preview
 
@@ -68,9 +51,9 @@ The installer features a beautiful, modern interface:
 ╚═══════════════════════════════════════════════════════════════════════════╝
 
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ Step 1/12 │ 🔍 Pre-Installation Checks
+║ Step 1/12 │ 🔍 Pre-Installation Checks                                    ║
 ╠════════════════════════════════════════════════════════════════════════════╣
-║ ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 8%
+║ ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 8%                                            ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
   ✓ Checking root privileges... ✓
@@ -102,18 +85,6 @@ npm run setup:admin
 npm start
 ```
 
-### Docker Installation
-
-```bash
-# Build and run with Docker
-docker build -t nexpanel .
-docker run -d -p 8080:8080 \
-  -v nexpanel_data:/data \
-  -v /var/www:/var/www \
-  --restart unless-stopped \
-  nexpanel
-```
-
 ## 🎯 Quick Start
 
 1. **Access the Panel**
@@ -136,56 +107,40 @@ docker run -d -p 8080:8080 \
    - Select your domain
    - Click "Issue Certificate"
 
-## 🎯 Installer Features
-### Modern UI
-- **Beautiful Design**: Colorful, gradient-style interface with modern box characters
-- **Progress Tracking**: Real-time progress bars showing installation status
-- **Clear Feedback**: Color-coded success/error/warning messages
-- **Structured Output**: Clean sections with visual separators
-
-### Smart & Fast
-- **Optimized Speed**: Batch package installations (~60% faster than traditional installers)
-- **Multi-Method Connectivity**: Tries curl, wget, and ping for reliable internet checks
-- **Automatic Fallback**: Curl/wget fallback ensures compatibility
-- **Resume Capability**: Can resume from last successful step on failure
-
-### Safe & Reliable
-- **Pre-flight Checks**: Validates OS, RAM, disk space, and internet before starting
-- **Automatic Rollback**: Reverts changes if installation fails
-- **Backup System**: Creates backups of modified files
-- **Error Handling**: Comprehensive error detection and reporting
-- **State Tracking**: Saves progress for potential resume
-
 ## 🗑️ Uninstallation
 
-To completely remove NexPanel from your system with beautiful UI:
+### ⚡ One-Command Uninstall
 
 ```bash
-# Download and run the uninstaller
 bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uninstall.sh)
 ```
 
-Or if you have the source locally:
+### Manual Uninstall
 
 ```bash
 chmod +x uninstall.sh
 sudo ./uninstall.sh
 ```
 
-**✨ Uninstaller Features:**
-- 🎨 Beautiful modern UI with colored boxes and progress bars
-- ⚡ Fast execution (~15-30 seconds)
-- 🛡️ Confirmation prompt before removal
-- 📊 Step-by-step progress tracking
-- ✅ Visual feedback for each action
-- 🔄 Handles all NexPanel components automatically
+**What the uninstaller removes:**
+- NexPanel service (systemd)
+- Nginx configurations
+- PHP-FPM pools
+- PM2 processes
+- Website directories
+- Backup directories
+- Database files
+- Log files
+- User accounts
+- Cron jobs
+- Firewall rules
 
-**Note:** This does not remove Node.js, MariaDB, or other system packages that were installed as dependencies.
+**Note:** This does not remove Node.js, MariaDB, or other system packages.
 
 ## 📚 Documentation
+
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Ubuntu Tuning Guide](docs/UBUNTU_TUNING.md)
-- [API Documentation](docs/API.md)
 
 ## 🔐 Security Features
 
@@ -200,7 +155,7 @@ sudo ./uninstall.sh
 
 ## 🎛️ System Management
 
-### Panel Service
+### Panel Service Commands
 
 ```bash
 # Check status
@@ -216,18 +171,7 @@ systemctl stop nexpanel
 journalctl -u nexpanel -f
 ```
 
-### Resource Monitoring
-
-The panel enforces strict resource limits:
-- Panel RAM usage: ≤500-600MB
-- Idle apps auto-stopped after 10 minutes
-- PHP-FPM: max 5 children per pool
-- Node.js apps: max 256MB memory
-- Aggressive log rotation
-
-### Manual Admin Setup
-
-If you need to reset the admin password:
+### Reset Admin Password
 
 ```bash
 cd /path/to/nexpanel
@@ -254,20 +198,10 @@ npm run setup:admin
 
 ## 📊 Performance
 
-### Installer Performance
-- ⚡ **Fast Installation**: 2-3 minutes on fresh Ubuntu system
-- 🔄 **Batch Operations**: Installs packages in groups, not individually
-- 🚫 **No Delays**: Removed artificial waits and spinners
-- 📦 **Smart Caching**: Reuses already-installed packages
-
-### Runtime Performance
-- ✅ Lightweight monitoring (no heavy agents)
-- ✅ Minimal background processes
-- ✅ Efficient database queries with connection pooling
-- ✅ Compressed logs with automatic rotation
-- ✅ Resource-aware process management
-- ✅ Panel RAM usage: ≤500-600MB
-- ✅ Idle apps auto-stopped after 10 minutes
+- **Fast Installation**: 2-3 minutes on fresh Ubuntu system
+- **Lightweight**: No heavy monitoring agents
+- **Efficient**: Connection pooling and optimized queries
+- **Resource-aware**: Panel RAM usage ≤500-600MB
 
 ## 🤝 Contributing
 
@@ -282,20 +216,6 @@ MIT License - see LICENSE file for details
 - **Issues**: [GitHub Issues](https://github.com/ayanhackss/nexpanel/issues)
 - **Documentation**: [Wiki](https://github.com/ayanhackss/nexpanel/wiki)
 
-## 🎉 Credits
-
-Built with ❤️ for the hosting community.
-
 ---
 
 **NexPanel** - Next-generation hosting management made simple.
-
-**✨ Features:**
-- 🚀 Modern, beautiful installer (2-3 min setup)
-- 🐘 Multi-PHP support (7.4, 8.0, 8.1, 8.2)
-- 🔒 Built-in security (Fail2ban, UFW, SSL)
-- 📊 Real-time monitoring dashboard
-- 🔄 One-click backups and restore
-- 🌐 Let's Encrypt SSL automation
-
-> **Note**: This panel is designed for production use. Always test in a staging environment first!
