@@ -223,6 +223,18 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first
     run_with_spinner "systemctl stop nginx mariadb php*-fpm redis-server vsftpd" "Stopping system services"
     
+    # Remove PM2 and global npm packages (Do this BEFORE removing Node.js)
+    if command -v npm &> /dev/null; then
+        run_with_spinner "npm uninstall -g pm2" "Removing PM2"
+        rm -rf /root/.pm2 /root/.npm /root/.config/configstore
+    else
+        # Fallback if npm is already gone
+        rm -rf /usr/lib/node_modules/pm2
+        rm -f /usr/bin/pm2 /usr/local/bin/pm2
+        rm -rf /root/.pm2
+        print_info "Removed PM2 files manually"
+    fi
+
     # Remove packages (Aggressive MariaDB cleanup)
     print_info "Removing packages..."
     
@@ -244,11 +256,7 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
         print_info "Removed mysql system user"
     fi
     
-    # Remove PM2 and global npm packages
-    if command -v npm &> /dev/null; then
-        run_with_spinner "npm uninstall -g pm2" "Removing PM2"
-        rm -rf /root/.pm2 /root/.npm /root/.config/configstore
-    fi
+
 
     # Remove Repositories
     print_info "Removing repositories..."
