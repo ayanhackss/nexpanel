@@ -8,17 +8,55 @@ const start = async (website) => {
 
     try {
         // Check if package.json exists
-        const { stdout } = await execAsync(`test -f ${appPath}/package.json && echo "exists"`);
+        const { stdout: pkgJsonExists } = await execAsync(`test -f ${appPath}/package.json && echo "exists"`);
 
-        if (!stdout.includes('exists')) {
+        if (!pkgJsonExists.includes('exists')) {
             throw new Error('package.json not found');
         }
+
+        // Read package.json to check for start script
+        const { stdout: pkgJsonContent } = await execAsync(`cat ${appPath}/package.json`);
+        const pkgJson = JSON.parse(pkgJsonContent);
 
         // Install dependencies if needed
         await execAsync(`cd ${appPath} && npm install --production`);
 
+        let startCommand;
+        
+        // Priority 1: npm start (standard for Next.js, NestJS, etc.)
+        if (pkgJson.scripts && pkgJson.scripts.start) {
+            startCommand = `npm start`;
+        } 
+        // Priority 2: main file from package.json
+        else if (pkgJson.main) {
+            startCommand = pkgJson.main;
+        }
+        // Priority 3: Common entry points
+        else {
+            const entryPoints = ['index.js', 'app.js', 'server.js', 'main.js'];
+            for (const file of entryPoints) {
+                try {
+                    await execAsync(`test -f ${appPath}/${file}`);
+                    startCommand = file;
+                    break;
+                } catch (e) {
+                     // continue checking
+                }
+            }
+        }
+
+        if (!startCommand) {
+            throw new Error('No start script or entry file found (checked scripts.start, main, index.js, app.js, server.js)');
+        }
+
         // Start with PM2
-        await execAsync(`pm2 start ${appPath}/index.js --name ${appName} -i 1 --max-memory-restart 256M`);
+        // If it's an npm script, we run "npm run start"
+        // If it's a file, we run that file directly
+        const pm2Command = startCommand === 'npm start' 
+            ? `pm2 start npm --name ${appName} -- start`
+            : `pm2 start ${appPath}/${startCommand} --name ${appName} -i 1 --max-memory-restart 256M`;
+
+        await execAsync(pm2Command);
         await execAsync(`pm2 save`);
 
         return true;

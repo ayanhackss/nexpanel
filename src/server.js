@@ -9,10 +9,25 @@ fastify.register(require('@fastify/helmet'), {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:']
+      imgSrc: ["'self'", 'data:'],
+      // Allow frame embedding for now if necessary, or keep restriction
+      // frameAncestors: ["'none'"] 
     }
+  },
+  // Disable HSTS on Node.js level (handled by Nginx)
+  hsts: false 
+});
+
+// CSRF Protection
+fastify.register(require('@fastify/csrf-protection'), {
+  cookieOpts: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true
   }
 });
+
+// Compression
+fastify.register(require('@fastify/compress'));
 
 // Rate limiting
 fastify.register(require('@fastify/rate-limit'), {
@@ -62,6 +77,8 @@ fastify.register(require('./routes/redis'), { prefix: '/api/redis' });
 fastify.register(require('./routes/webhooks'), { prefix: '/api/webhooks' });
 fastify.register(require('./routes/email'), { prefix: '/api/email' });
 fastify.register(require('./routes/staging'), { prefix: '/api/staging' });
+fastify.register(require('./routes/health'), { prefix: '/health' });
+fastify.register(require('./routes/system'), { prefix: '/api/system' });
 
 // Dashboard route
 fastify.get('/', async (request, reply) => {
@@ -69,6 +86,17 @@ fastify.get('/', async (request, reply) => {
     return reply.redirect('/auth/login');
   }
   return reply.view('dashboard.ejs', { user: request.session.user });
+});
+
+// Global error handler
+fastify.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
+  const statusCode = error.statusCode || 500;
+  reply.status(statusCode).send({
+    error: statusCode === 500 ? 'Internal Server Error' : error.message,
+    statusCode,
+    message: statusCode === 500 ? 'Something went wrong' : error.message
+  });
 });
 
 // Start server
@@ -80,8 +108,36 @@ const start = async () => {
     await fastify.listen({ port, host });
     console.log(`\n🚀 NexPanel running on http://${host}:${port}`);
     console.log(`📊 Dashboard: http://localhost:${port}`);
+
+    // Graceful shutdown
+    const signals = ['SIGINT', 'SIGTERM'];
+    for (const signal of signals) {
+      process.on(signal, () => {
+        console.log(`\nCreation signal received: ${signal}`);
+        closeServer();
+      });
+    }
+
   } catch (err) {
     fastify.log.error(err);
+    process.exit(1);
+  }
+};
+
+const closeServer = async () => {
+  console.log('Closing server...');
+  try {
+    await fastify.close();
+    
+    // Close database connections
+    const { mariaPool, sqliteDb } = require('./config/database');
+    await mariaPool.end();
+    sqliteDb.close();
+    
+    console.log('Server closed successfully');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error closing server:', err);
     process.exit(1);
   }
 };

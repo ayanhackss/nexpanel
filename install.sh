@@ -888,14 +888,14 @@ if should_skip_step 7; then
     print_info "⏭️  Skipping: Node.js (already completed)"
 else
 
-print_step "⚡ Installing Node.js 18 LTS"
+print_step "⚡ Installing Node.js 20 LTS"
 
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node -v)
     print_success "Node.js already installed: $NODE_VERSION"
 else
     echo -e "${WHITE}Installing Node.js...${NC}"
-    run_with_spinner "curl -fsSL https://deb.nodesource.com/setup_18.x | bash -" "Adding Node.js repository"
+    run_with_spinner "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -" "Adding Node.js repository"
     run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nodejs" "Installing Node.js"
     print_success "Node.js $(node -v) installed"
 fi

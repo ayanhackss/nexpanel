@@ -16,8 +16,9 @@ const mariaPool = mysql.createPool({
 // SQLite for panel metadata
 const sqliteDb = new Database(path.join(__dirname, '../../data/panel.db'));
 
-// Enable foreign key constraints
+// Enable foreign key constraints and WAL mode
 sqliteDb.pragma('foreign_keys = ON');
+sqliteDb.pragma('journal_mode = WAL');
 
 // Initialize SQLite schema
 const initSqlite = () => {

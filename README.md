@@ -7,6 +7,7 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 ## ✨ Features
 
 ### Core Management
+
 - **Website & App Management** - Create and manage PHP, Node.js, and Python applications
 - **Multi-PHP Support** - PHP 7.4, 8.0, 8.1, 8.2 with easy version switching
 - **Database Management** - MariaDB database and user management
@@ -15,6 +16,7 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 - **Backups & Restore** - Scheduled backups with one-click restore
 
 ### Enhanced Features
+
 - **Git Integration** - Clone, pull, push, and manage repositories
 - **Monitoring Dashboard** - Real-time system stats (CPU, RAM, Disk, Traffic)
 - **Log Viewer** - Search and stream logs in real-time
@@ -26,6 +28,12 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 - **Webhook Manager** - Automated deployment hooks
 - **Email Management** - Postfix email accounts and forwarding
 - **Staging Environments** - Clone production to staging
+
+### 🚀 Framework Support
+
+- **Node.js**: Native support for **Next.js**, **NestJS**, **Express**, and more (auto-detects `npm start`).
+- **Python**: Support for **Django**, **Flask**, **FastAPI**.
+- **Static/PHP**: Support for **Vue.js**, **React**, **Angular** (via built output), and standard PHP apps.
 
 ## 📋 Requirements
 
@@ -41,6 +49,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/ins
 ```
 
 **✨ Beautiful Modern Installer:**
+
 - 🎨 Sleek, colorful UI with progress bars
 - ⚡ Optimized for speed (~60% faster)
 - 🛡️ Automatic rollback on failure
@@ -48,6 +57,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/ins
 - ✅ Smart connectivity detection
 
 **What it does:**
+
 1. ✅ Validates system requirements (OS, RAM, disk, internet)
 2. ✅ Installs all dependencies (Nginx, PHP 7.4-8.2, Node.js 18, Python, MariaDB, Redis)
 3. ✅ Configures services with production-optimized settings
@@ -105,6 +115,7 @@ npm start
 ## 🎯 Quick Start
 
 1. **Access the Panel**
+
    ```
    http://YOUR_SERVER_IP:8080
    ```
@@ -125,26 +136,46 @@ npm start
    - Click "Issue Certificate"
 
 ## 🎯 Installer Features
+
 ### Modern UI
+
 - **Beautiful Design**: Colorful, gradient-style interface with modern box characters
 - **Progress Tracking**: Real-time progress bars showing installation status
 - **Clear Feedback**: Color-coded success/error/warning messages
 - **Structured Output**: Clean sections with visual separators
 
 ### Smart & Fast
+
 - **Optimized Speed**: Batch package installations (~60% faster than traditional installers)
 - **Multi-Method Connectivity**: Tries curl, wget, and ping for reliable internet checks
 - **Automatic Fallback**: Curl/wget fallback ensures compatibility
 - **Resume Capability**: Can resume from last successful step on failure
 
 ### Safe & Reliable
+
 - **Pre-flight Checks**: Validates OS, RAM, disk space, and internet before starting
 - **Automatic Rollback**: Reverts changes if installation fails
 - **Backup System**: Creates backups of modified files
 - **Error Handling**: Comprehensive error detection and reporting
 - **State Tracking**: Saves progress for potential resume
 
+## 🗑️ Uninstallation
+
+To completely remove NexPanel from your system with beautiful UI:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uninstall.sh || wget -qO- https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uninstall.sh)
+```
+
+**✨ Features:**
+
+- 🎨 Beautiful modern UI matching the installer
+- ⚡ Fast and safe execution
+- 🛡️ Confirmation before destruction
+- 🧹 Optional cleanup of data and databases
+
 ## 📚 Documentation
+
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Ubuntu Tuning Guide](docs/UBUNTU_TUNING.md)
 - [API Documentation](docs/API.md)
@@ -177,6 +208,7 @@ journalctl -u nexpanel -f
 ### Resource Monitoring
 
 The panel enforces strict resource limits:
+
 - Panel RAM usage: ≤500-600MB
 - Idle apps auto-stopped after 10 minutes
 - PHP-FPM: max 5 children per pool
@@ -185,7 +217,7 @@ The panel enforces strict resource limits:
 
 ## 🏗️ Technology Stack
 
-- **Backend**: Node.js 18 LTS with Fastify
+- **Backend**: Node.js 20 LTS with Fastify
 - **Frontend**: Server-rendered EJS templates
 - **Database**: MariaDB + SQLite
 - **Web Server**: Nginx (optimized configuration)
@@ -198,12 +230,14 @@ The panel enforces strict resource limits:
 ## 📊 Performance
 
 ### Installer Performance
+
 - ⚡ **Fast Installation**: 2-3 minutes on fresh Ubuntu system
 - 🔄 **Batch Operations**: Installs packages in groups, not individually
 - 🚫 **No Delays**: Removed artificial waits and spinners
 - 📦 **Smart Caching**: Reuses already-installed packages
 
 ### Runtime Performance
+
 - ✅ Lightweight monitoring (no heavy agents)
 - ✅ Minimal background processes
 - ✅ Efficient database queries with connection pooling
@@ -234,6 +268,7 @@ Built with ❤️ for the hosting community.
 **NexPanel** - Next-generation hosting management made simple.
 
 **✨ Features:**
+
 - 🚀 Modern, beautiful installer (2-3 min setup)
 - 🐘 Multi-PHP support (7.4, 8.0, 8.1, 8.2)
 - 🔒 Built-in security (Fail2ban, UFW, SSL)
