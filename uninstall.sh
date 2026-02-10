@@ -210,57 +210,25 @@ print_step "🔄 Reloading Services"
 run_with_spinner "systemctl restart nginx" "Restarting Nginx"
 run_with_spinner "systemctl restart mariadb" "Restarting MariaDB"
 run_with_spinner "systemctl restart fail2ban" "Restarting Fail2Ban"
-# Step 5: Optional Data Removal
-print_step "🧹 Data Cleanup Options"
-echo -e "${YELLOW}Would you like to remove the NexPanel data directory?${NC}"
-echo -e "${DIM}(Contains website backups, logs, and uploads)${NC}"
-read -p "$(echo -e "${WHITE}Remove /opt/nexpanel/data? [y/N]: ${NC}")" -n 1 -r remove_data
-echo ""
-echo ""
-if [[ $remove_data =~ ^[Yy]$ ]]; then
-    if [ -d "/opt/nexpanel/data" ]; then
-         run_with_spinner "rm -rf /opt/nexpanel/data" "Removing data directory"
-    else
-         print_info "Data directory already removed"
-    fi
-else
-    print_info "Skipping data removal"
-fi
-echo -e "${YELLOW}Would you like to remove the 'nexpanel' database?${NC}"
-echo -e "${DIM}(Contains panel settings, user accounts, and metadata)${NC}"
-read -p "$(echo -e "${WHITE}Remove panel database? [y/N]: ${NC}")" -n 1 -r remove_db
-echo ""
-echo ""
-if [[ $remove_db =~ ^[Yy]$ ]]; then
-    echo -e "${WHITE}Please enter MariaDB root password:${NC}"
-    read -s DB_PASS
-    echo ""
-    
-    if mysql -u root -p"$DB_PASS" -e "DROP DATABASE IF EXISTS nexpanel;" 2>/dev/null; then
-        print_success "Dropped 'nexpanel' database"
-        mysql -u root -p"$DB_PASS" -e "DROP USER IF EXISTS 'panel_admin'@'localhost';" 2>/dev/null
-        print_success "Removed 'panel_admin' database user"
-        mysql -u root -p"$DB_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
-    else
-        print_error "Failed to drop database (Incorrect password?)"
-    fi
-else
-    print_info "Skipping database removal"
-fi
-# Step 6: Full System Cleanup
+# Step 5: Full System Cleanup (Packages)
 print_step "🧹 Full System Cleanup"
 echo -e "${RED}${BOLD}Do you want to remove installed packages?${NC}"
 echo -e "${DIM}(Nginx, MariaDB, PHP, Node.js, Certbot)${NC}"
 read -p "$(echo -e "${WHITE}Remove packages? [y/N]: ${NC}")" -n 1 -r remove_pkgs
 echo ""
 echo ""
+
+PACKAGES_REMOVED=false
+
 if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first
     run_with_spinner "systemctl stop nginx mariadb php*-fpm" "Stopping system services"
+    
     # Remove packages
     print_info "Removing packages..."
     DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx > /dev/null 2>&1
     print_success "Packages removed"
+    
     # Cleanup dependencies
     run_with_spinner "apt-get autoremove -y" "Cleaning up unused dependencies"
     
@@ -268,22 +236,75 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     rm -rf /etc/nginx /etc/mysql /etc/php
     print_success "Removed service configurations"
     
-    # Force remove MariaDB data if packages were removed (no password needed)
+    PACKAGES_REMOVED=true
+else
+    print_info "Skipping package removal"
+fi
+
+# Step 6: Database & Data Cleanup
+print_step "🗑️ Data Removal"
+
+if [ "$PACKAGES_REMOVED" = true ]; then
+    # Scenario A: Packages are gone. We can just delete files. No password needed.
     if [ -d "/var/lib/mysql" ]; then
-        echo -e "${YELLOW}Remove MariaDB data directory? (/var/lib/mysql)${NC}"
-        read -p "$(echo -e "${WHITE}Remove DB data? [y/N]: ${NC}")" -n 1 -r remove_db_data
+        echo -e "${YELLOW}Remove MariaDB data directory?${NC}"
+        echo -e "${DIM}(WARNING: This deletes ALL databases)${NC}"
+        read -p "$(echo -e "${WHITE}Remove /var/lib/mysql? [y/N]: ${NC}")" -n 1 -r remove_db_data
         echo ""
         if [[ $remove_db_data =~ ^[Yy]$ ]]; then
             run_with_spinner "rm -rf /var/lib/mysql" "Removing MariaDB data directory"
         fi
     fi
 else
-    print_info "Skipping package removal"
+    # Scenario B: Packages exist. We must be polite and use SQL.
+    echo -e "${YELLOW}Would you like to remove the 'nexpanel' database?${NC}"
+    echo -e "${DIM}(Contains panel settings, user accounts, and metadata)${NC}"
+    read -p "$(echo -e "${WHITE}Remove panel database? [y/N]: ${NC}")" -n 1 -r remove_db
+    echo ""
+    
+    if [[ $remove_db =~ ^[Yy]$ ]]; then
+        # Try to auto-detect password first
+        if [ -f "/root/nexpanel-credentials.txt" ]; then
+            DB_PASS=$(grep "MariaDB Root Password:" /root/nexpanel-credentials.txt | cut -d: -f2 | xargs)
+        fi
+
+        if [ -n "$DB_PASS" ] && mysql -u root -p"$DB_PASS" -e "STATUS" >/dev/null 2>&1; then
+             print_info "Using credentials from file..."
+        else
+             echo -e "${WHITE}Please enter MariaDB root password:${NC}"
+             read -s DB_PASS
+             echo ""
+        fi
+
+        if mysql -u root -p"$DB_PASS" -e "DROP DATABASE IF EXISTS nexpanel;" 2>/dev/null; then
+            print_success "Dropped 'nexpanel' database"
+            mysql -u root -p"$DB_PASS" -e "DROP USER IF EXISTS 'panel_admin'@'localhost';" 2>/dev/null
+            print_success "Removed 'panel_admin' database user"
+            mysql -u root -p"$DB_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+        else
+            print_error "Failed to drop database (Incorrect password?)"
+        fi
+    else
+        print_info "Skipping database removal"
+    fi
 fi
+
+# Remove Panel Data
+echo -e "${YELLOW}Would you like to remove the NexPanel data directory?${NC}"
+echo -e "${DIM}(Contains website backups, logs, and uploads)${NC}"
+read -p "$(echo -e "${WHITE}Remove /opt/nexpanel/data? [y/N]: ${NC}")" -n 1 -r remove_data
+echo ""
+if [[ $remove_data =~ ^[Yy]$ ]]; then
+    if [ -d "/opt/nexpanel/data" ]; then
+         run_with_spinner "rm -rf /opt/nexpanel/data" "Removing data directory"
+    fi
+else
+    print_info "Skipping data removal"
+fi
+
 echo -e "${RED}${BOLD}Do you want to remove ALL website data?${NC}"
 echo -e "${DIM}(/var/www - WARNING: This destroys all hosted sites)${NC}"
 read -p "$(echo -e "${WHITE}Remove /var/www? [y/N]: ${NC}")" -n 1 -r remove_www
-echo ""
 echo ""
 if [[ $remove_www =~ ^[Yy]$ ]]; then
     run_with_spinner "rm -rf /var/www" "Removing /var/www"

@@ -86,6 +86,7 @@ EOF
 print_step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     local step_name="$1"
+    local est_time="$2"
     local percentage=$((CURRENT_STEP * 100 / TOTAL_STEPS))
     
     # Clear previous output and add spacing
@@ -101,9 +102,15 @@ print_step() {
     for ((i=0; i<filled; i++)); do bar+="▰"; done
     for ((i=0; i<empty; i++)); do bar+="▱"; done
     
+    # Format time if provided
+    local time_str=""
+    if [ -n "$est_time" ]; then
+        time_str="${GRAY}(Est: ${WHITE}${est_time}${GRAY})${NC}"
+    fi
+
     # Modern box design with gradient colors
     echo -e "${BRIGHT_CYAN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_CYAN}║${NC} ${BRIGHT_YELLOW}Step ${CURRENT_STEP}/${TOTAL_STEPS}${NC} ${GRAY}│${NC} ${step_name}"
+    echo -e "${BRIGHT_CYAN}║${NC} ${BRIGHT_YELLOW}Step ${CURRENT_STEP}/${TOTAL_STEPS}${NC} ${GRAY}│${NC} ${step_name} ${time_str}"
     echo -e "${BRIGHT_CYAN}╠════════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${BRIGHT_CYAN}║${NC} ${BRIGHT_GREEN}${bar}${NC} ${BRIGHT_YELLOW}${percentage}%${NC}"
     echo -e "${BRIGHT_CYAN}╚════════════════════════════════════════════════════════════════════╝${NC}"
@@ -460,7 +467,7 @@ fi
 if should_skip_step 1; then
     print_info "⏭️  Skipping: Pre-Installation Checks (already completed)"
 else
-    print_step "🔍 Pre-Installation Checks"
+    print_step "🔍 Pre-Installation Checks" "5s"
 
 echo -e "${BRIGHT_CYAN}┌─────────────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BRIGHT_CYAN}│${NC} ${WHITE}${BOLD}Validating System Requirements${NC}                                    ${BRIGHT_CYAN}│${NC}"
@@ -582,7 +589,7 @@ if should_skip_step 2; then
     print_info "⏭️  Skipping: System Update (already completed)"
 else
 
-print_step "📦 Updating System Packages"
+print_step "📦 Updating System Packages" "1-3m"
 
 run_with_spinner "apt-get update -qq -o Acquire::Languages=none -o Acquire::GzipIndexes=true" "Refreshing package repositories"
 
@@ -611,7 +618,7 @@ if should_skip_step 3; then
     print_info "⏭️  Skipping: Core Dependencies (already completed)"
 else
 
-print_step "🔧 Installing Core Dependencies"
+print_step "🔧 Installing Core Dependencies" "1-2m"
 
 # 1. Install software-properties-common first (needed for add-apt-repository)
 if ! dpkg -s software-properties-common >/dev/null 2>&1; then
@@ -702,7 +709,7 @@ if should_skip_step 4; then
     print_info "⏭️  Skipping: Nginx (already completed)"
 else
 
-print_step "🌐 Installing Nginx Web Server"
+print_step "🌐 Installing Nginx Web Server" "30s"
 
 if systemctl is-active --quiet nginx; then
     print_success "Nginx already running"
@@ -721,11 +728,34 @@ if should_skip_step 5; then
     print_info "⏭️  Skipping: MariaDB (already completed)"
 else
 
-print_step "🗄️ Installing MariaDB Database"
+print_step "🗄️ Installing MariaDB Database" "1-2m"
 
 if systemctl is-active --quiet mariadb; then
     print_success "MariaDB already running"
 else
+    # PIN-POINT FIX: Prepare environment to prevent common installation failures
+    
+    # 1. Kill conflicting processes that lock the DB files
+    if pgrep -x "mysqld" >/dev/null; then
+        print_info "Detailed Fix: Stopping stuck MySQL/MariaDB processes..."
+        systemctl stop mariadb 2>/dev/null || true
+        systemctl stop mysql 2>/dev/null || true
+        pkill -9 -x mysqld 2>/dev/null || true
+    fi
+
+    # 2. Handle "Zombie Data" (Common cause of re-install failures)
+    # If package is NOT installed, but /var/lib/mysql EXISTS, it ensures a crash.
+    if [ -d "/var/lib/mysql" ] && ! dpkg -s mariadb-server >/dev/null 2>&1; then
+        print_warning "Detailed Fix: Found orphaned data from previous install."
+        print_info "Backing up old data to /var/lib/mysql.bak.$(date +%s) to allow clean install..."
+        mv /var/lib/mysql "/var/lib/mysql.bak.$(date +%s)"
+    fi
+
+    # 3. Clean incomplete package states
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
+    dpkg --configure -a >/dev/null 2>&1
+
+    # Now run the install cleanly
     run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client" "Installing MariaDB"
     run_with_spinner "systemctl enable --now mariadb" "Starting MariaDB"
 fi
@@ -781,7 +811,7 @@ if should_skip_step 6; then
     print_info "⏭️  Skipping: PHP-FPM (already completed)"
 else
 
-print_step "🐘 Installing PHP-FPM (Multiple Versions)"
+print_step "🐘 Installing PHP-FPM (Multiple Versions)" "3-5m"
 
     run_with_spinner "LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php" "Adding PHP repository"
     run_with_spinner "apt-get update -qq -o Acquire::Languages=none" "Updating package lists"
@@ -840,7 +870,7 @@ if should_skip_step 7; then
     print_info "⏭️  Skipping: Node.js (already completed)"
 else
 
-print_step "⚡ Installing Node.js 20 LTS"
+print_step "⚡ Installing Node.js 20 LTS" "1m"
 
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node -v)
@@ -872,7 +902,7 @@ if should_skip_step 8; then
     print_info "⏭️  Skipping: Python (already completed)"
 else
 
-print_step "🐍 Installing Python 3 and Tools"
+print_step "🐍 Installing Python 3 and Tools" "1-2m"
 
 PYTHON_PACKAGES=("python3" "python3-pip" "python3-venv" "python3-dev")
 
@@ -903,7 +933,7 @@ if should_skip_step 9; then
     print_info "⏭️  Skipping: Redis & VSFTPD (already completed)"
 else
 
-print_step "⚡ Installing Redis Cache Server"
+print_step "⚡ Installing Redis Cache Server" "30s"
 
 if systemctl is-active --quiet redis-server; then
     print_success "Redis already running"
@@ -931,7 +961,7 @@ if should_skip_step 10; then
     print_info "⏭️  Skipping: Firewall Configuration (already completed)"
 else
 
-print_step "🔒 Configuring Firewall (UFW)"
+print_step "🔒 Configuring Firewall (UFW)" "10s"
 
 ufw --force enable 2>&1 | tee -a "$LOG_FILE" > /dev/null
 ufw allow 22/tcp comment 'SSH' 2>&1 | tee -a "$LOG_FILE" > /dev/null
@@ -953,7 +983,7 @@ if should_skip_step 11; then
     print_info "⏭️  Skipping: NexPanel Application Setup (already completed)"
 else
 
-print_step "🚀 Installing NexPanel Application"
+print_step "🚀 Installing NexPanel Application" "1-2m"
 
 PANEL_DIR="/opt/nexpanel"
 print_info "Creating directory: $PANEL_DIR"
@@ -988,7 +1018,7 @@ if should_skip_step 12; then
     print_info "⏭️  Skipping: Systemd Service (already completed)"
 else
 
-print_step "⚙️ Creating Systemd Service"
+print_step "⚙️ Creating Systemd Service" "10s"
 
 backup_file "/etc/systemd/system/nexpanel.service"
 cat > /etc/systemd/system/nexpanel.service << EOF
@@ -1080,7 +1110,7 @@ if should_skip_step 13; then
     print_info "⏭️  Skipping: System Optimization (already completed)"
 else
 
-print_step "⚡ Applying System Optimizations"
+print_step "⚡ Applying System Optimizations" "20s"
 
 # MariaDB tuning
 print_info "Optimizing MariaDB for 2-4GB RAM..."
@@ -1200,7 +1230,7 @@ print_success "Professional SSH banner verified"
 # Health Checks
 #############################################
 
-print_step "🏥 Running Health Checks"
+print_step "🏥 Running Health Checks" "10s"
 
 SERVICES=("nginx" "mariadb" "php8.2-fpm" "redis-server")
 ALL_HEALTHY=true
