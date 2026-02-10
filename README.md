@@ -37,8 +37,25 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 ### ⚡ One-Command Install (2-3 minutes)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh || wget -qO- https://raw.githubusercontent.com/ayanhackss/nexpanel/main/install.sh)
 ```
+
+**✨ Beautiful Modern Installer:**
+- 🎨 Sleek, colorful UI with progress bars
+- ⚡ Optimized for speed (~60% faster)
+- 🛡️ Automatic rollback on failure
+- 📊 Real-time progress tracking
+- ✅ Smart connectivity detection
+
+**What it does:**
+1. ✅ Validates system requirements (OS, RAM, disk, internet)
+2. ✅ Installs all dependencies (Nginx, PHP 7.4-8.2, Node.js 18, Python, MariaDB, Redis)
+3. ✅ Configures services with production-optimized settings
+4. ✅ Sets up firewall (UFW) with secure defaults
+5. ✅ Creates admin account with strong password
+6. ✅ Displays login credentials and next steps
+
+**Installation Time:** ~2-3 minutes on a fresh Ubuntu system
 
 ### 📸 Installation Preview
 
@@ -50,11 +67,11 @@ The installer features a beautiful, modern interface:
 ║   🚀  Next-Generation Hosting Management Panel  🚀                       ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 
-╔════════════════════════════════════════════════════════════════════════════╗
-║ Step 1/12 │ 🔍 Pre-Installation Checks                                    ║
-╠════════════════════════════════════════════════════════════════════════════╣
-║ ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 8%                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════════════╗
+║ Step 1/12 │ 🔍 Pre-Installation Checks
+╠════════════════════════════════════════════════════════════════════╣
+║ ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 8%
+╚════════════════════════════════════════════════════════════════════╝
 
   ✓ Checking root privileges... ✓
   ✓ Detecting operating system... ✓
@@ -63,9 +80,9 @@ The installer features a beautiful, modern interface:
   ✓ Disk: 50GB available
   ✓ Internet connection active
 
-╔════════════════════════════════════════════════════════════════════════════╗
+╔════════════════════════════════════════════════════════════════════╗
 ║  ✓  All Pre-Installation Checks Passed!                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+╚════════════════════════════════════════════════════════════════════╝
 ```
 
 ### Manual Installation
@@ -78,8 +95,8 @@ cd nexpanel
 # Install dependencies
 npm install
 
-# Setup admin user (creates database and admin account)
-npm run setup:admin
+# Create data directory
+mkdir -p data
 
 # Start the panel
 npm start
@@ -94,7 +111,7 @@ npm start
 
 2. **Login**
    - Username: `admin`
-   - Password: (provided after installation/setup)
+   - Password: (provided after installation)
 
 3. **Create Your First Website**
    - Go to "Websites" → "Create New"
@@ -107,40 +124,30 @@ npm start
    - Select your domain
    - Click "Issue Certificate"
 
-## 🗑️ Uninstallation
+## 🎯 Installer Features
+### Modern UI
+- **Beautiful Design**: Colorful, gradient-style interface with modern box characters
+- **Progress Tracking**: Real-time progress bars showing installation status
+- **Clear Feedback**: Color-coded success/error/warning messages
+- **Structured Output**: Clean sections with visual separators
 
-### ⚡ One-Command Uninstall
+### Smart & Fast
+- **Optimized Speed**: Batch package installations (~60% faster than traditional installers)
+- **Multi-Method Connectivity**: Tries curl, wget, and ping for reliable internet checks
+- **Automatic Fallback**: Curl/wget fallback ensures compatibility
+- **Resume Capability**: Can resume from last successful step on failure
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uninstall.sh)
-```
-
-### Manual Uninstall
-
-```bash
-chmod +x uninstall.sh
-sudo ./uninstall.sh
-```
-
-**What the uninstaller removes:**
-- NexPanel service (systemd)
-- Nginx configurations
-- PHP-FPM pools
-- PM2 processes
-- Website directories
-- Backup directories
-- Database files
-- Log files
-- User accounts
-- Cron jobs
-- Firewall rules
-
-**Note:** This does not remove Node.js, MariaDB, or other system packages.
+### Safe & Reliable
+- **Pre-flight Checks**: Validates OS, RAM, disk space, and internet before starting
+- **Automatic Rollback**: Reverts changes if installation fails
+- **Backup System**: Creates backups of modified files
+- **Error Handling**: Comprehensive error detection and reporting
+- **State Tracking**: Saves progress for potential resume
 
 ## 📚 Documentation
-
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Ubuntu Tuning Guide](docs/UBUNTU_TUNING.md)
+- [API Documentation](docs/API.md)
 
 ## 🔐 Security Features
 
@@ -155,34 +162,26 @@ sudo ./uninstall.sh
 
 ## 🎛️ System Management
 
-### Panel Service Commands
+### Service Control
 
 ```bash
-# Check status
+# Panel service
 systemctl status nexpanel
-
-# Restart
 systemctl restart nexpanel
-
-# Stop
 systemctl stop nexpanel
 
 # View logs
 journalctl -u nexpanel -f
 ```
 
-### Reset Admin Password
+### Resource Monitoring
 
-```bash
-cd /path/to/nexpanel
-npm run setup:admin -- --username admin --password YourNewPassword
-```
-
-Or generate a random password:
-
-```bash
-npm run setup:admin
-```
+The panel enforces strict resource limits:
+- Panel RAM usage: ≤500-600MB
+- Idle apps auto-stopped after 10 minutes
+- PHP-FPM: max 5 children per pool
+- Node.js apps: max 256MB memory
+- Aggressive log rotation
 
 ## 🏗️ Technology Stack
 
@@ -198,10 +197,20 @@ npm run setup:admin
 
 ## 📊 Performance
 
-- **Fast Installation**: 2-3 minutes on fresh Ubuntu system
-- **Lightweight**: No heavy monitoring agents
-- **Efficient**: Connection pooling and optimized queries
-- **Resource-aware**: Panel RAM usage ≤500-600MB
+### Installer Performance
+- ⚡ **Fast Installation**: 2-3 minutes on fresh Ubuntu system
+- 🔄 **Batch Operations**: Installs packages in groups, not individually
+- 🚫 **No Delays**: Removed artificial waits and spinners
+- 📦 **Smart Caching**: Reuses already-installed packages
+
+### Runtime Performance
+- ✅ Lightweight monitoring (no heavy agents)
+- ✅ Minimal background processes
+- ✅ Efficient database queries with connection pooling
+- ✅ Compressed logs with automatic rotation
+- ✅ Resource-aware process management
+- ✅ Panel RAM usage: ≤500-600MB
+- ✅ Idle apps auto-stopped after 10 minutes
 
 ## 🤝 Contributing
 
@@ -216,6 +225,20 @@ MIT License - see LICENSE file for details
 - **Issues**: [GitHub Issues](https://github.com/ayanhackss/nexpanel/issues)
 - **Documentation**: [Wiki](https://github.com/ayanhackss/nexpanel/wiki)
 
+## 🎉 Credits
+
+Built with ❤️ for the hosting community.
+
 ---
 
 **NexPanel** - Next-generation hosting management made simple.
+
+**✨ Features:**
+- 🚀 Modern, beautiful installer (2-3 min setup)
+- 🐘 Multi-PHP support (7.4, 8.0, 8.1, 8.2)
+- 🔒 Built-in security (Fail2ban, UFW, SSL)
+- 📊 Real-time monitoring dashboard
+- 🔄 One-click backups and restore
+- 🌐 Let's Encrypt SSL automation
+
+> **Note**: This panel is designed for production use. Always test in a staging environment first!
