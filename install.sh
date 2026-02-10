@@ -233,67 +233,7 @@ attempt_purge_recovery() {
     print_success "MariaDB purged and secured successfully."
 }
 
-setup_cloudflared() {
-    print_info "Checking Cloudflare Tunnel configuration..."
-    
-    if ! command -v cloudflared &> /dev/null; then
-        print_info "Installing Cloudflare Tunnel (cloudflared)..."
-        # Create directory for the package
-        mkdir -p /tmp/cloudflared
-        cd /tmp/cloudflared
-        
-        # Download the latest deb package
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-        
-        # Install it
-        dpkg -i cloudflared-linux-amd64.deb >/dev/null 2>&1
-        cd - >/dev/null
-        
-        if command -v cloudflared &> /dev/null; then
-            print_success "Cloudflare Tunnel installed successfully"
-        else
-            print_error "Failed to install Cloudflare Tunnel"
-            return 1
-        fi
-    else
-        print_success "Cloudflare Tunnel is already installed"
-    fi
-    
-    echo ""
-    echo -e "${BRIGHT_CYAN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_CYAN}║${NC}  ${WHITE}${BOLD}☁️  CLOUDFLARE TUNNEL SETUP${NC}                                        ${BRIGHT_CYAN}║${NC}"
-    echo -e "${BRIGHT_CYAN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${WHITE}If your server is behind a NAT or has firewall restrictions,${NC}"
-    echo -e "${WHITE}you can use Cloudflare Tunnel to expose the panel securely.${NC}"
-    echo ""
-    
-    read -p "$(echo -e "${YELLOW}${BOLD}Do you want to setup Cloudflare Tunnel now? (Press 'n' if you don't have a token) [y/N]${NC} ")" -n 1 -r choice
-    echo ""
-    if [[ ! $choice =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    
-    echo ""
-    echo -e "${WHITE}Please enter your Cloudflare Tunnel Token:${NC}"
-    echo -e "${DIM}(You can get this from the Cloudflare Zero Trust Dashboard)${NC}"
-    read -p "Token: " token
-    
-    if [ -n "$token" ]; then
-        print_info "Configuring tunnel service..."
-        cloudflared service uninstall >/dev/null 2>&1 || true
-        if cloudflared service install "$token" >/dev/null 2>&1; then
-            print_success "Cloudflare Tunnel service installed"
-            print_info "Starting tunnel..."
-            systemctl start cloudflared
-            print_success "Cloudflare Tunnel is active!"
-        else
-            print_error "Failed to install tunnel service. Check your token."
-        fi
-    else
-        print_warning "No token provided. Skipping setup."
-    fi
-}
+
 
 detect_previous_installation() {
     local components_found=0
@@ -350,7 +290,7 @@ detect_previous_installation() {
         echo -e "  ${GRAY}[4]${NC} Exit installer"
         echo ""
         
-        read -p "$(echo -e "${WHITE}Enter your choice [1-4]: ${NC}")" -n 1 -r choice
+        read -p "$(echo -e "${WHITE}Enter your choice [1-4]: ${NC}")" -r choice
         echo ""
         echo ""
         
@@ -428,7 +368,7 @@ cleanup_on_failure() {
     print_error "Installation failed! Initiating cleanup..."
     
     # Don't cleanup if user wants to keep partial installation
-    read -p "$(echo -e "${YELLOW}Do you want to rollback changes? [y/N]: ${NC}")" -n 1 -r
+    read -p "$(echo -e "${YELLOW}Do you want to rollback changes? [y/N]: ${NC}")" -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         print_warning "Keeping partial installation. You can resume later."
@@ -566,7 +506,7 @@ if [ "$VER" != "20.04" ] && [ "$VER" != "22.04" ]; then
     echo ""
     print_warning "This installer is tested on Ubuntu 20.04/22.04"
     print_warning "You are running Ubuntu $VER"
-    read -p "$(echo -e "${YELLOW}Continue anyway? [y/N]: ${NC}")" -n 1 -r
+    read -p "$(echo -e "${YELLOW}Continue anyway? [y/N]: ${NC}")" -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 1
@@ -649,7 +589,7 @@ run_with_spinner "apt-get update -qq -o Acquire::Languages=none -o Acquire::Gzip
 echo ""
 echo -e "${YELLOW}Would you like to perform a full system upgrade? (Recommended for security)${NC}"
 echo -e "${DIM}Note: This may take a long time on some systems.${NC}"
-read -p "$(echo -e "${WHITE}Upgrade packages? [Y/n]: ${NC}")" -n 1 -r upgrade_choice
+read -p "$(echo -e "${WHITE}Upgrade packages? [Y/n]: ${NC}")" -r upgrade_choice
 echo ""
 echo ""
 
@@ -853,7 +793,7 @@ print_step "🐘 Installing PHP-FPM (Multiple Versions)"
     echo -e "  ${GREEN}[3]${NC} Balanced (PHP 7.4 + 8.2) - Legacy support + Performance"
     echo ""
     
-    read -p "$(echo -e "${WHITE}Enter choice [1-3] (Default: 1): ${NC}")" -n 1 -r php_choice
+    read -p "$(echo -e "${WHITE}Enter choice [1-3] (Default: 1): ${NC}")" -r php_choice
     echo ""
     echo ""
     
@@ -1292,6 +1232,33 @@ fi
 # Installation Complete
 #############################################
 
+# Post-Installation Health Verification
+echo -e "${BRIGHT_BLUE}INFO:${NC} Verifying application status..."
+sleep 5 # Give it a moment to crash if it's going to crash
+
+if ! systemctl is-active --quiet nexpanel; then
+    echo -e "${RED}${BOLD}❌ ERROR: NexPanel service failed to start!${NC}"
+    echo -e "${YELLOW}Last 20 lines of application log:${NC}"
+    echo "----------------------------------------"
+    journalctl -u nexpanel -n 20 --no-pager
+    echo "----------------------------------------"
+    echo -e "${YELLOW}Possible solutions:${NC}"
+    echo "1. Check if Node.js dependencies installed correctly"
+    echo "2. RAM/Swap issues (check 'dmesg | grep OOM')"
+    print_error "Installation completed with service failure."
+    exit 1
+fi
+
+if ! netstat -tuln | grep -q ":8080 "; then
+    echo -e "${RED}${BOLD}❌ ERROR: NexPanel service is running but NOT listening on port 8080!${NC}"
+    echo -e "${YELLOW}Checking application logs...${NC}"
+    journalctl -u nexpanel -n 20 --no-pager
+    print_error "Port 8080 is not accessible locally."
+    exit 1
+fi
+
+echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}NexPanel is running and listening on port 8080${NC}"
+
 echo ""
 echo ""
 echo -e "${GREEN}${BOLD}"
@@ -1351,20 +1318,14 @@ echo -e "  ${DIM}Credentials saved to: /root/nexpanel-credentials.txt${NC}"
 echo ""
 
 
-# Offer Cloudflare Tunnel Setup
-setup_cloudflared
+
 
 echo -e "${PURPLE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${PURPLE}${BOLD}║${NC}  ${WHITE}${BOLD}🚀 NEXT STEPS${NC}                                                    ${PURPLE}${BOLD}║${NC}"
 echo -e "${PURPLE}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${YELLOW}${BOLD}1.${NC} Access your panel:"
-if systemctl is-active --quiet cloudflared; then
-    echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}https://<your-tunnel-domain>${NC} ${DIM}(Cloudflare Tunnel)${NC}"
-    echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC} ${DIM}(Direct IP)${NC}"
-else
     echo -e "     ${DIM}►${NC} ${BRIGHT_YELLOW}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080${NC}"
-fi
 echo ""
 
 echo -e "${BLUE}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
