@@ -1,13 +1,10 @@
 #!/bin/bash
-
 #############################################
 # NexPanel - Uninstaller
 # For Ubuntu 20.04 / 22.04 LTS
 # Removes NexPanel and associated configurations
 #############################################
-
 set -e
-
 # Colors and formatting - Enhanced palette
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -19,7 +16,6 @@ WHITE=$'\033[1;37m'
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
 NC=$'\033[0m'
-
 # Enhanced colors for modern UI
 PURPLE=$'\033[0;35m'
 BRIGHT_BLUE=$'\033[1;34m'
@@ -27,21 +23,17 @@ BRIGHT_GREEN=$'\033[1;32m'
 BRIGHT_CYAN=$'\033[1;36m'
 BRIGHT_YELLOW=$'\033[1;33m'
 GRAY=$'\033[0;90m'
-
 # Log file setup
 LOG_FILE="/var/log/nexpanel-uninstall.log"
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 exec 1> >(tee -a "$LOG_FILE")
 exec 2>&1
-
 # Progress tracking
 TOTAL_STEPS=7
 CURRENT_STEP=0
-
 #############################################
 # Helper Functions
 #############################################
-
 print_banner() {
     clear
     echo -e "${BRIGHT_CYAN}${BOLD}"
@@ -66,7 +58,6 @@ EOF
     echo -e "${NC}"
     echo ""
 }
-
 print_step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     local step_name="$1"
@@ -89,23 +80,18 @@ print_step() {
     echo -e "${BRIGHT_CYAN}╚════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
-
 print_success() {
     echo -e "  ${BRIGHT_GREEN}✓${NC} ${WHITE}$1${NC}"
 }
-
 print_error() {
     echo -e "  ${RED}✗${NC} ${WHITE}$1${NC}"
 }
-
 print_warning() {
     echo -e "  ${BRIGHT_YELLOW}⚠${NC} ${WHITE}$1${NC}"
 }
-
 print_info() {
     echo -e "  ${BRIGHT_BLUE}ℹ${NC} ${DIM}$1${NC}"
 }
-
 run_with_spinner() {
     local command="$1"
     local message="$2"
@@ -142,19 +128,15 @@ run_with_spinner() {
         return $exit_code
     fi
 }
-
 #############################################
 # Main Uninstallation Flow
 #############################################
-
 print_banner
-
 # Check root
 if [ "$EUID" -ne 0 ]; then
     print_error "This script must be run as root"
     exit 1
 fi
-
 echo -e "${RED}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${RED}${BOLD}║${NC}  ${WHITE}${BOLD}⚠️  DESTRUCTIVE ACTION CONFIRMATION${NC}                               ${RED}${BOLD}║${NC}"
 echo -e "${RED}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
@@ -167,93 +149,74 @@ echo -e "    • Web server configurations for the panel"
 echo ""
 echo -e "  ${YELLOW}Existing websites and databases will NOT be deleted unless specified.${NC}"
 echo ""
-
 read -p "$(echo -e "${RED}${BOLD}Are you sure you want to proceed? Type 'uninstall' to confirm:${NC} ")" confirm
 if [ "$confirm" != "uninstall" ]; then
     echo ""
     print_warning "Uninstallation cancelled."
     exit 0
 fi
-
 # Step 1: Stop Services
 print_step "🛑 Stopping Services"
-
 if systemctl is-active --quiet nexpanel; then
     run_with_spinner "systemctl stop nexpanel" "Stopping NexPanel service"
     run_with_spinner "systemctl disable nexpanel" "Disabling NexPanel service"
 else
     print_info "NexPanel service is not running"
 fi
-
 # Step 2: Remove Panel Files
 print_step "🗑️ Removing Panel Files"
-
 if [ -d "/opt/nexpanel" ]; then
     run_with_spinner "rm -rf /opt/nexpanel" "Removing panel directory (/opt/nexpanel)"
 else
     print_warning "Panel directory not found"
 fi
-
 if [ -f "/etc/systemd/system/nexpanel.service" ]; then
     run_with_spinner "rm -f /etc/systemd/system/nexpanel.service" "Removing systemd service file"
 fi
-
 if [ -f "/root/nexpanel-credentials.txt" ]; then
     run_with_spinner "rm -f /root/nexpanel-credentials.txt" "Removing credentials file"
 fi
-
 # Step 3: Remove System Configurations
 print_step "⚙️ Cleaning System Configurations"
-
 # Remove Nginx config
 if [ -f "/etc/nginx/sites-enabled/nexpanel" ]; then
     rm -f /etc/nginx/sites-enabled/nexpanel
     rm -f /etc/nginx/sites-available/nexpanel
     print_success "Removed Nginx proxy configuration"
 fi
-
 if [ -f "/etc/nginx/conf.d/tuning.conf" ]; then
     rm -f /etc/nginx/conf.d/tuning.conf
     print_success "Removed Nginx tuning configuration"
 fi
-
 # Remove MariaDB config
 if [ -f "/etc/mysql/mariadb.conf.d/99-nexpanel.cnf" ]; then
     rm -f /etc/mysql/mariadb.conf.d/99-nexpanel.cnf
     print_success "Removed MariaDB tuning configuration"
 fi
-
 # Remove Fail2Ban config
 if [ -f "/etc/fail2ban/jail.d/nexpanel.conf" ]; then
     rm -f /etc/fail2ban/jail.d/nexpanel.conf
     rm -f /etc/fail2ban/filter.d/nexpanel.conf
     print_success "Removed Fail2Ban configuration"
 fi
-
 # Remove MOTD
 if [ -f "/etc/update-motd.d/99-nexpanel" ]; then
     rm -f /etc/update-motd.d/99-nexpanel
     print_success "Removed SSH banner"
 fi
-
 run_with_spinner "systemctl daemon-reload" "Reloading systemd daemon"
-
 # Step 4: Reload Services
 print_step "🔄 Reloading Services"
-
 run_with_spinner "systemctl restart nginx" "Restarting Nginx"
 run_with_spinner "systemctl restart mariadb" "Restarting MariaDB"
 run_with_spinner "systemctl restart fail2ban" "Restarting Fail2Ban"
-
 # Step 5: Optional Data Removal
 print_step "🧹 Data Cleanup Options"
-
 echo -e "${YELLOW}Would you like to remove the NexPanel data directory?${NC}"
 echo -e "${DIM}(Contains website backups, logs, and uploads)${NC}"
 read -p "$(echo -e "${WHITE}Remove /opt/nexpanel/data? [y/N]: ${NC}")" -n 1 -r remove_data
 echo ""
 echo ""
-
 if [[ $remove_data =~ ^[Yy]$ ]]; then
     if [ -d "/opt/nexpanel/data" ]; then
          run_with_spinner "rm -rf /opt/nexpanel/data" "Removing data directory"
@@ -263,13 +226,11 @@ if [[ $remove_data =~ ^[Yy]$ ]]; then
 else
     print_info "Skipping data removal"
 fi
-
 echo -e "${YELLOW}Would you like to remove the 'nexpanel' database?${NC}"
 echo -e "${DIM}(Contains panel settings, user accounts, and metadata)${NC}"
 read -p "$(echo -e "${WHITE}Remove panel database? [y/N]: ${NC}")" -n 1 -r remove_db
 echo ""
 echo ""
-
 if [[ $remove_db =~ ^[Yy]$ ]]; then
     echo -e "${WHITE}Please enter MariaDB root password:${NC}"
     read -s DB_PASS
@@ -286,26 +247,20 @@ if [[ $remove_db =~ ^[Yy]$ ]]; then
 else
     print_info "Skipping database removal"
 fi
-
-
 # Step 6: Full System Cleanup
 print_step "🧹 Full System Cleanup"
-
 echo -e "${RED}${BOLD}Do you want to remove installed packages?${NC}"
 echo -e "${DIM}(Nginx, MariaDB, PHP, Node.js, Certbot)${NC}"
 read -p "$(echo -e "${WHITE}Remove packages? [y/N]: ${NC}")" -n 1 -r remove_pkgs
 echo ""
 echo ""
-
 if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first
     run_with_spinner "systemctl stop nginx mariadb php*-fpm" "Stopping system services"
-
     # Remove packages
     print_info "Removing packages..."
     DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx > /dev/null 2>&1
     print_success "Packages removed"
-
     # Cleanup dependencies
     run_with_spinner "apt-get autoremove -y" "Cleaning up unused dependencies"
     
@@ -325,21 +280,16 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
 else
     print_info "Skipping package removal"
 fi
-
-
 echo -e "${RED}${BOLD}Do you want to remove ALL website data?${NC}"
 echo -e "${DIM}(/var/www - WARNING: This destroys all hosted sites)${NC}"
 read -p "$(echo -e "${WHITE}Remove /var/www? [y/N]: ${NC}")" -n 1 -r remove_www
 echo ""
 echo ""
-
 if [[ $remove_www =~ ^[Yy]$ ]]; then
     run_with_spinner "rm -rf /var/www" "Removing /var/www"
 fi
-
 # Step 7: Completion
 print_step "✨ Uninstallation Complete"
-
 echo -e "${GREEN}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}${BOLD}║${NC}  ${WHITE}${BOLD}✅ NexPanel has been uninstalled${NC}                                    ${GREEN}${BOLD}║${NC}"
 echo -e "${GREEN}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
