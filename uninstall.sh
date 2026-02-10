@@ -35,7 +35,7 @@ exec 1> >(tee -a "$LOG_FILE")
 exec 2>&1
 
 # Progress tracking
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 CURRENT_STEP=0
 
 #############################################
