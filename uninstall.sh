@@ -224,10 +224,26 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first
     run_with_spinner "systemctl stop nginx mariadb php*-fpm redis-server vsftpd" "Stopping system services"
     
-    # Remove packages
+    # Remove packages (Aggressive MariaDB cleanup)
     print_info "Removing packages..."
-    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx redis-server vsftpd > /dev/null 2>&1
+    
+    # Identify all MariaDB/MySQL related packages
+    MARIA_PKGS=$(dpkg -l | grep -E "mariadb|mysql" | awk '{print $2}')
+    
+    if [ -n "$MARIA_PKGS" ]; then
+        print_info "Found database packages: $MARIA_PKGS"
+        DEBIAN_FRONTEND=noninteractive apt-get purge -y $MARIA_PKGS > /dev/null 2>&1
+    fi
+    
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full php* nodejs certbot python3-certbot-nginx redis-server vsftpd > /dev/null 2>&1
     print_success "Packages removed"
+    
+    # Remove system user and group for mysql if they exist
+    if id -u mysql >/dev/null 2>&1; then
+        deluser mysql >/dev/null 2>&1 || true
+        delgroup mysql >/dev/null 2>&1 || true
+        print_info "Removed mysql system user"
+    fi
     
     # Remove PM2 and global npm packages
     if command -v npm &> /dev/null; then

@@ -743,12 +743,20 @@ else
         pkill -9 -x mysqld 2>/dev/null || true
     fi
 
-    # 2. Handle "Zombie Data" (Common cause of re-install failures)
-    # If package is NOT installed, but /var/lib/mysql EXISTS, it ensures a crash.
-    if [ -d "/var/lib/mysql" ] && ! dpkg -s mariadb-server >/dev/null 2>&1; then
-        print_warning "Detailed Fix: Found orphaned data from previous install."
-        print_info "Backing up old data to /var/lib/mysql.bak.$(date +%s) to allow clean install..."
-        mv /var/lib/mysql "/var/lib/mysql.bak.$(date +%s)"
+    # 2. Handle "Zombie Data" and "Zombie Configs"
+    # If package is NOT installed, but /var/lib/mysql OR /etc/mysql EXISTS, it ensures a crash.
+    if ! dpkg -s mariadb-server >/dev/null 2>&1; then
+        if [ -d "/var/lib/mysql" ]; then
+            print_warning "Detailed Fix: Found orphaned data from previous install."
+            print_info "Backing up old data to /var/lib/mysql.bak.$(date +%s) to allow clean install..."
+            mv /var/lib/mysql "/var/lib/mysql.bak.$(date +%s)"
+        fi
+        
+        if [ -d "/etc/mysql" ]; then
+             print_warning "Detailed Fix: Found orphaned configuration."
+             print_info "Backing up old config to /etc/mysql.bak.$(date +%s)..."
+             mv /etc/mysql "/etc/mysql.bak.$(date +%s)"
+        fi
     fi
 
     # 3. Clean incomplete package states
