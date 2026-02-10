@@ -222,19 +222,34 @@ PACKAGES_REMOVED=false
 
 if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first
-    run_with_spinner "systemctl stop nginx mariadb php*-fpm" "Stopping system services"
+    run_with_spinner "systemctl stop nginx mariadb php*-fpm redis-server vsftpd" "Stopping system services"
     
     # Remove packages
     print_info "Removing packages..."
-    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx > /dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx redis-server vsftpd > /dev/null 2>&1
     print_success "Packages removed"
     
+    # Remove PM2 and global npm packages
+    if command -v npm &> /dev/null; then
+        run_with_spinner "npm uninstall -g pm2" "Removing PM2"
+        rm -rf /root/.pm2 /root/.npm /root/.config/configstore
+    fi
+
+    # Remove Repositories
+    print_info "Removing repositories..."
+    add-apt-repository --remove -y ppa:ondrej/php >/dev/null 2>&1 || true
+    rm -f /etc/apt/sources.list.d/nodesource.list
+    rm -f /etc/apt/keyrings/nodesource.gpg
+    
     # Cleanup dependencies
-    run_with_spinner "apt-get autoremove -y" "Cleaning up unused dependencies"
+    run_with_spinner "apt-get autoremove -y --purge" "Cleaning up unused dependencies"
     
     # Remove configs
-    rm -rf /etc/nginx /etc/mysql /etc/php
-    print_success "Removed service configurations"
+    rm -rf /etc/nginx /etc/mysql /etc/php /etc/redis /etc/vsftpd.conf
+    rm -rf /var/log/nginx /var/log/mysql /var/log/redis
+    rm -rf /tmp/cloudflared
+    
+    print_success "Removed service configurations and repositories"
     
     PACKAGES_REMOVED=true
 else
