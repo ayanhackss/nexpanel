@@ -205,11 +205,10 @@ if [ -f "/etc/update-motd.d/99-nexpanel" ]; then
     print_success "Removed SSH banner"
 fi
 run_with_spinner "systemctl daemon-reload" "Reloading systemd daemon"
-# Step 4: Reload Services
-print_step "🔄 Reloading Services"
-run_with_spinner "systemctl restart nginx" "Restarting Nginx"
-run_with_spinner "systemctl restart mariadb" "Restarting MariaDB"
-run_with_spinner "systemctl restart fail2ban" "Restarting Fail2Ban"
+# Step 4: Reload Services - REMOVED
+# We do not want to restart services during uninstall as they might be broken.
+# Proceeding directly to cleanup.
+
 # Step 5: Full System Cleanup (Packages)
 print_step "🧹 Full System Cleanup"
 echo -e "${RED}${BOLD}Do you want to remove installed packages?${NC}"
