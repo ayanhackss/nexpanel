@@ -5,7 +5,14 @@ const execAsync = promisify(exec);
 
 const PHP_FPM_POOL_DIR = '/etc/php';
 
+// Sanitize website name to prevent command injection
+const sanitizeName = (name) => {
+    if (!name) return '';
+    return String(name).replace(/[^a-zA-Z0-9_-]/g, '');
+};
+
 const reloadPool = async (name, phpVersion = '8.2') => {
+    const sanitizedName = sanitizeName(name);
     try {
         await execAsync(`systemctl reload php${phpVersion}-fpm`);
         return true;
@@ -15,8 +22,9 @@ const reloadPool = async (name, phpVersion = '8.2') => {
 };
 
 const createPool = async (name, phpVersion) => {
-    const poolConfig = generatePoolConfig(name, phpVersion);
-    const poolPath = `${PHP_FPM_POOL_DIR}/${phpVersion}/fpm/pool.d/${name}.conf`;
+    const sanitizedName = sanitizeName(name);
+    const poolConfig = generatePoolConfig(sanitizedName, phpVersion);
+    const poolPath = `${PHP_FPM_POOL_DIR}/${phpVersion}/fpm/pool.d/${sanitizedName}.conf`;
 
     try {
         await fs.writeFile(poolPath, poolConfig);
