@@ -934,8 +934,8 @@ if [ ${#PYTHON_TO_INSTALL[@]} -gt 0 ]; then
     run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ${PYTHON_TO_INSTALL[*]}" "Installing Python packages"
 fi
 
-run_with_spinner "pip3 install --upgrade pip --quiet --no-warn-script-location" "Upgrading pip"
-run_with_spinner "pip3 install gunicorn uvicorn --quiet --no-warn-script-location" "Installing Python tools"
+run_with_spinner "pip3 install --upgrade pip --break-system-packages --quiet --no-warn-script-location || true" "Upgrading pip (if possible)"
+run_with_spinner "pip3 install gunicorn uvicorn --break-system-packages --quiet --no-warn-script-location" "Installing Python tools"
 print_success "Python tools installed"
     echo -e "${DIM}────────────────────────────────────────────────────────────────────${NC}"
     save_state
