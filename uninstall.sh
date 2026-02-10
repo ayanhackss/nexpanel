@@ -288,17 +288,61 @@ else
 fi
 
 
-# Step 6: Completion
+# Step 6: Full System Cleanup
+print_step "🧹 Full System Cleanup"
+
+echo -e "${RED}${BOLD}Do you want to remove installed packages?${NC}"
+echo -e "${DIM}(Nginx, MariaDB, PHP, Node.js, Certbot)${NC}"
+read -p "$(echo -e "${WHITE}Remove packages? [y/N]: ${NC}")" -n 1 -r remove_pkgs
+echo ""
+echo ""
+
+if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
+    # Stop services first
+    run_with_spinner "systemctl stop nginx mariadb php*-fpm" "Stopping system services"
+
+    # Remove packages
+    print_info "Removing packages..."
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full mariadb-server mariadb-client php* nodejs certbot python3-certbot-nginx > /dev/null 2>&1
+    print_success "Packages removed"
+
+    # Cleanup dependencies
+    run_with_spinner "apt-get autoremove -y" "Cleaning up unused dependencies"
+    
+    # Remove configs
+    rm -rf /etc/nginx /etc/mysql /etc/php
+    print_success "Removed service configurations"
+    
+    # Force remove MariaDB data if packages were removed (no password needed)
+    if [ -d "/var/lib/mysql" ]; then
+        echo -e "${YELLOW}Remove MariaDB data directory? (/var/lib/mysql)${NC}"
+        read -p "$(echo -e "${WHITE}Remove DB data? [y/N]: ${NC}")" -n 1 -r remove_db_data
+        echo ""
+        if [[ $remove_db_data =~ ^[Yy]$ ]]; then
+            run_with_spinner "rm -rf /var/lib/mysql" "Removing MariaDB data directory"
+        fi
+    fi
+else
+    print_info "Skipping package removal"
+fi
+
+
+echo -e "${RED}${BOLD}Do you want to remove ALL website data?${NC}"
+echo -e "${DIM}(/var/www - WARNING: This destroys all hosted sites)${NC}"
+read -p "$(echo -e "${WHITE}Remove /var/www? [y/N]: ${NC}")" -n 1 -r remove_www
+echo ""
+echo ""
+
+if [[ $remove_www =~ ^[Yy]$ ]]; then
+    run_with_spinner "rm -rf /var/www" "Removing /var/www"
+fi
+
+# Step 7: Completion
 print_step "✨ Uninstallation Complete"
 
 echo -e "${GREEN}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}${BOLD}║${NC}  ${WHITE}${BOLD}✅ NexPanel has been uninstalled${NC}                                    ${GREEN}${BOLD}║${NC}"
 echo -e "${GREEN}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "  ${WHITE}The following have been kept:${NC}"
-echo -e "    • Nginx, MariaDB, Node.js packages"
-echo -e "    • User website files (/var/www)"
-echo -e "    • System user accounts"
 echo ""
 echo -e "  ${DIM}Log file: $LOG_FILE${NC}"
 echo ""
