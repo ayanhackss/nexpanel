@@ -1,10 +1,13 @@
 #!/bin/bash
+
 #############################################
 # NexPanel - Uninstaller
 # For Ubuntu 20.04 / 22.04 LTS
 # Removes NexPanel and associated configurations
 #############################################
+
 set -e
+
 # Colors and formatting - Enhanced palette
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -16,6 +19,7 @@ WHITE=$'\033[1;37m'
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
 NC=$'\033[0m'
+
 # Enhanced colors for modern UI
 PURPLE=$'\033[0;35m'
 BRIGHT_BLUE=$'\033[1;34m'
@@ -23,17 +27,21 @@ BRIGHT_GREEN=$'\033[1;32m'
 BRIGHT_CYAN=$'\033[1;36m'
 BRIGHT_YELLOW=$'\033[1;33m'
 GRAY=$'\033[0;90m'
+
 # Log file setup
 LOG_FILE="/var/log/nexpanel-uninstall.log"
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 exec 1> >(tee -a "$LOG_FILE")
 exec 2>&1
+
 # Progress tracking
 TOTAL_STEPS=7
 CURRENT_STEP=0
+
 #############################################
 # Helper Functions
 #############################################
+
 print_banner() {
     clear
     echo -e "${BRIGHT_CYAN}${BOLD}"
@@ -58,6 +66,7 @@ EOF
     echo -e "${NC}"
     echo ""
 }
+
 print_step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     local step_name="$1"
@@ -80,18 +89,23 @@ print_step() {
     echo -e "${BRIGHT_CYAN}╚════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
+
 print_success() {
     echo -e "  ${BRIGHT_GREEN}✓${NC} ${WHITE}$1${NC}"
 }
+
 print_error() {
     echo -e "  ${RED}✗${NC} ${WHITE}$1${NC}"
 }
+
 print_warning() {
     echo -e "  ${BRIGHT_YELLOW}⚠${NC} ${WHITE}$1${NC}"
 }
+
 print_info() {
     echo -e "  ${BRIGHT_BLUE}ℹ${NC} ${DIM}$1${NC}"
 }
+
 run_with_spinner() {
     local command="$1"
     local message="$2"
@@ -128,15 +142,19 @@ run_with_spinner() {
         return $exit_code
     fi
 }
+
 #############################################
 # Main Uninstallation Flow
 #############################################
+
 print_banner
+
 # Check root
 if [ "$EUID" -ne 0 ]; then
     print_error "This script must be run as root"
     exit 1
 fi
+
 echo -e "${RED}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${RED}${BOLD}║${NC}  ${WHITE}${BOLD}⚠️  DESTRUCTIVE ACTION CONFIRMATION${NC}                               ${RED}${BOLD}║${NC}"
 echo -e "${RED}${BOLD}╚════════════════════════════════════════════════════════════════════╝${NC}"
@@ -144,40 +162,52 @@ echo ""
 echo -e "  ${WHITE}You are about to uninstall NexPanel from your server.${NC}"
 echo -e "  ${WHITE}This will remove:${NC}"
 echo -e "    • The NexPanel application and service"
-echo -e "    • Admin credentials and configuration files"
-echo -e "    • Web server configurations for the panel"
+echo -e "    • Web server (Nginx)"
+echo -e "    • Database (MariaDB)"
+echo -e "    • Mail Server (Postfix/Dovecot)"
+echo -e "    • Configuration files and credentials"
 echo ""
 echo -e "  ${YELLOW}Existing websites and databases will NOT be deleted unless specified.${NC}"
 echo ""
+
 read -p "$(echo -e "${RED}${BOLD}Are you sure you want to proceed? Type 'uninstall' to confirm:${NC} ")" confirm
+
 if [ "$confirm" != "uninstall" ]; then
     echo ""
     print_warning "Uninstallation cancelled."
     exit 0
 fi
+
 # Step 1: Stop Services
 print_step "🛑 Stopping Services"
+
 if systemctl is-active --quiet nexpanel; then
     run_with_spinner "systemctl stop nexpanel" "Stopping NexPanel service"
     run_with_spinner "systemctl disable nexpanel" "Disabling NexPanel service"
 else
     print_info "NexPanel service is not running"
 fi
+
 # Step 2: Remove Panel Files
 print_step "🗑️ Removing Panel Files"
+
 if [ -d "/opt/nexpanel" ]; then
     run_with_spinner "rm -rf /opt/nexpanel" "Removing panel directory (/opt/nexpanel)"
 else
     print_warning "Panel directory not found"
 fi
+
 if [ -f "/etc/systemd/system/nexpanel.service" ]; then
     run_with_spinner "rm -f /etc/systemd/system/nexpanel.service" "Removing systemd service file"
 fi
+
 if [ -f "/root/nexpanel-credentials.txt" ]; then
     run_with_spinner "rm -f /root/nexpanel-credentials.txt" "Removing credentials file"
 fi
+
 # Step 3: Remove System Configurations
 print_step "⚙️ Cleaning System Configurations"
+
 # Remove Nginx config
 if [ -f "/etc/nginx/sites-enabled/nexpanel" ]; then
     rm -f /etc/nginx/sites-enabled/nexpanel
@@ -188,31 +218,33 @@ if [ -f "/etc/nginx/conf.d/tuning.conf" ]; then
     rm -f /etc/nginx/conf.d/tuning.conf
     print_success "Removed Nginx tuning configuration"
 fi
+
 # Remove MariaDB config
 if [ -f "/etc/mysql/mariadb.conf.d/99-nexpanel.cnf" ]; then
     rm -f /etc/mysql/mariadb.conf.d/99-nexpanel.cnf
     print_success "Removed MariaDB tuning configuration"
 fi
+
 # Remove Fail2Ban config
 if [ -f "/etc/fail2ban/jail.d/nexpanel.conf" ]; then
     rm -f /etc/fail2ban/jail.d/nexpanel.conf
     rm -f /etc/fail2ban/filter.d/nexpanel.conf
     print_success "Removed Fail2Ban configuration"
 fi
+
 # Remove MOTD
 if [ -f "/etc/update-motd.d/99-nexpanel" ]; then
     rm -f /etc/update-motd.d/99-nexpanel
     print_success "Removed SSH banner"
 fi
-run_with_spinner "systemctl daemon-reload" "Reloading systemd daemon"
-# Step 4: Reload Services - REMOVED
-# We do not want to restart services during uninstall as they might be broken.
-# Proceeding directly to cleanup.
 
-# Step 5: Full System Cleanup (Packages)
+run_with_spinner "systemctl daemon-reload" "Reloading systemd daemon"
+
+# Step 4: Full System Cleanup (Packages)
 print_step "🧹 Full System Cleanup"
+
 echo -e "${RED}${BOLD}Do you want to remove installed packages?${NC}"
-echo -e "${DIM}(Nginx, MariaDB, PHP, Node.js, Certbot)${NC}"
+echo -e "${DIM}(Nginx, MariaDB, PHP, Node.js, Certbot, Mail Server)${NC}"
 read -p "$(echo -e "${WHITE}Remove packages? [y/N]: ${NC}")" -n 1 -r remove_pkgs
 echo ""
 echo ""
@@ -221,7 +253,7 @@ PACKAGES_REMOVED=false
 
 if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     # Stop services first (Force stop to prevent hangs)
-    run_with_spinner "timeout 10s systemctl stop nginx mariadb php*-fpm redis-server vsftpd || (pkill -9 -f nginx; pkill -9 -f mysqld; pkill -9 -f php-fpm; pkill -9 -f redis; pkill -9 -f vsftpd) || true" "Stopping system services"
+    run_with_spinner "timeout 10s systemctl stop nginx mariadb php*-fpm redis-server vsftpd postfix dovecot || (pkill -9 -f nginx; pkill -9 -f mysqld; pkill -9 -f php-fpm; pkill -9 -f redis; pkill -9 -f vsftpd; pkill -9 -f master; pkill -9 -f dovecot) || true" "Stopping system services"
     
     # Remove PM2 and global npm packages (Do this BEFORE removing Node.js)
     if command -v npm &> /dev/null; then
@@ -246,8 +278,19 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
         DEBIAN_FRONTEND=noninteractive apt-get purge -y $MARIA_PKGS > /dev/null 2>&1
     fi
     
-    DEBIAN_FRONTEND=noninteractive apt-get purge -y nginx nginx-common nginx-full php* nodejs certbot python3-certbot-nginx redis-server vsftpd > /dev/null 2>&1
-    print_success "Packages removed"
+    # Comprehensive package monitoring
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+        nginx nginx-common nginx-full \
+        php* \
+        nodejs \
+        certbot python3-certbot-nginx \
+        redis-server \
+        vsftpd \
+        postfix postfix-mysql \
+        dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql \
+        > /dev/null 2>&1
+        
+    print_success "Packages removed (Web, DB, Mail, Cache, FTP)"
     
     # Remove system user and group for mysql if they exist
     if id -u mysql >/dev/null 2>&1; then
@@ -255,8 +298,6 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
         delgroup mysql >/dev/null 2>&1 || true
         print_info "Removed mysql system user"
     fi
-    
-
 
     # Remove Repositories
     print_info "Removing repositories..."
@@ -269,7 +310,8 @@ if [[ $remove_pkgs =~ ^[Yy]$ ]]; then
     
     # Remove configs
     rm -rf /etc/nginx /etc/mysql /etc/php /etc/redis /etc/vsftpd.conf
-    rm -rf /var/log/nginx /var/log/mysql /var/log/redis
+    rm -rf /etc/postfix /etc/dovecot
+    rm -rf /var/log/nginx /var/log/mysql /var/log/redis /var/log/mail.log
     rm -rf /tmp/cloudflared
     
     print_success "Removed service configurations and repositories"
@@ -340,13 +382,15 @@ else
     print_info "Skipping data removal"
 fi
 
-echo -e "${RED}${BOLD}Do you want to remove ALL website data?${NC}"
-echo -e "${DIM}(/var/www - WARNING: This destroys all hosted sites)${NC}"
-read -p "$(echo -e "${WHITE}Remove /var/www? [y/N]: ${NC}")" -n 1 -r remove_www
+echo -e "${RED}${BOLD}Do you want to remove ALL website and email data?${NC}"
+echo -e "${DIM}(/var/www AND /var/vmail - WARNING: This destroys all hosted sites and emails)${NC}"
+read -p "$(echo -e "${WHITE}Remove /var/www and /var/vmail? [y/N]: ${NC}")" -n 1 -r remove_www
 echo ""
 if [[ $remove_www =~ ^[Yy]$ ]]; then
     run_with_spinner "rm -rf /var/www" "Removing /var/www"
+    run_with_spinner "rm -rf /var/vmail" "Removing /var/vmail"
 fi
+
 # Step 7: Completion
 print_step "✨ Uninstallation Complete"
 echo -e "${GREEN}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"
@@ -355,3 +399,4 @@ echo -e "${GREEN}${BOLD}╚═════════════════�
 echo ""
 echo -e "  ${DIM}Log file: $LOG_FILE${NC}"
 echo ""
+
