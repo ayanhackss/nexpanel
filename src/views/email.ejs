@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Manager - NexPanel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0F172A; color: #F1F5F9; margin: 0; display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: #1E293B; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; }
+        .main-content { flex: 1; padding: 32px; overflow-y: auto; }
+        .card { background: #1E293B; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .btn { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 500; cursor: pointer; transition: all 0.2s; color: white; }
+        .btn-primary { background: #6366F1; }
+        .btn-primary:hover { background: #4F46E5; }
+        .btn-danger { background: #EF4444; }
+        .btn-danger:hover { background: #DC2626; }
+        input, select { width: 100%; padding: 10px; background: #0F172A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: #94A3B8; font-weight: 500; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        td { padding: 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+    <%- include('partials/sidebar', { active: 'email' }) %>
+
+    <div class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+            <div>
+                <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">Email Accounts</h1>
+                <p style="color: #94A3B8;">Manage IMAP/POP3 Mailboxes.</p>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button onclick="runSetup()" class="btn" style="background: #334155;">Re-Run Config</button>
+                <button onclick="document.getElementById('addModal').style.display='flex'" class="btn btn-primary">
+                    + Add Account
+                </button>
+            </div>
+        </div>
+
+        <div class="alert" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 16px; border-radius: 8px; margin-bottom: 24px; color: #93C5FD; font-size: 14px;">
+            <strong style="display: block; margin-bottom: 4px;">Config Info:</strong>
+            IMAP/SMTP Host: <code>mail.yourdomain.com</code> (or server IP) <br>
+            Username: Full email address <br>
+            Use port 587 (STARTTLS) for SMTP and 143/993 for IMAP.
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Email Address</th>
+                        <th>Quota</th>
+                        <th>Created</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="accountList">
+                    <tr><td colspan="4" style="text-align: center; padding: 32px; color: #94A3B8;">Loading accounts...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add Modal -->
+    <div id="addModal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="card" style="width: 400px; padding: 32px;">
+            <h2 style="margin-top: 0;">New Email Account</h2>
+            
+            <label>Username (prefix)</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <input type="text" id="userPart" placeholder="info" style="margin-bottom: 0;">
+                <div style="padding: 10px; color: #94A3B8;">@</div>
+                <select id="domainPart" style="margin-bottom: 0;">
+                    <% domains.forEach(d => { %>
+                        <option value="<%= d.domain %>"><%= d.domain %></option>
+                    <% }); %>
+                </select>
+            </div>
+            
+            <label>Password</label>
+            <input type="password" id="passwordInput">
+            
+            <label>Quota (MB)</label>
+            <input type="number" id="quotaInput" value="1024">
+
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="btn btn-primary" onclick="createAccount()" style="flex: 1;">Create</button>
+                <button class="btn" onclick="document.getElementById('addModal').style.display='none'" style="background: #334155; flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAccounts() {
+            try {
+                const res = await axios.get('/email/api/accounts');
+                const tbody = document.getElementById('accountList');
+                tbody.innerHTML = '';
+                
+                if (res.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 32px; color: #94A3B8;">No email accounts found.</td></tr>';
+                    return;
+                }
+
+                res.data.forEach(acc => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${acc.email}</td>
+                            <td>${acc.quota_mb} MB</td>
+                            <td>${new Date(acc.created_at).toLocaleDateString()}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-danger" onclick="deleteAccount(${acc.id})" style="padding: 6px 12px; font-size: 13px;">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load accounts. Ensure database is setup.');
+            }
+        }
+
+        async function createAccount() {
+            const user = document.getElementById('userPart').value;
+            const domain = document.getElementById('domainPart').value;
+            const password = document.getElementById('passwordInput').value;
+            const quota = document.getElementById('quotaInput').value;
+
+            if(!user || !domain || !password) return alert('All fields required');
+
+            const email = `${user}@${domain}`;
+
+            try {
+                await axios.post('/email/api/create', { email, password, quota });
+                document.getElementById('addModal').style.display = 'none';
+                document.getElementById('userPart').value = '';
+                document.getElementById('passwordInput').value = '';
+                loadAccounts();
+            } catch (err) {
+                alert('Failed to create account: ' + (err.response?.data?.error || err.message));
+            }
+        }
+
+        async function deleteAccount(id) {
+            if(!confirm('Delete this email account? Data will be lost.')) return;
+            try {
+                await axios.post('/email/api/delete', { id });
+                loadAccounts();
+            } catch (err) {
+                alert('Failed to delete account');
+            }
+        }
+
+        async function runSetup() {
+            if(!confirm('Re-configure Postfix/Dovecot? This might overwrite config files.')) return;
+            try {
+                alert('Running setup... this may take a moment.');
+                await axios.post('/email/api/setup');
+                alert('Configuration complete!');
+            } catch (err) {
+                alert('Setup failed check server logs.');
+            }
+        }
+
+        loadAccounts();
+    </script>
+</body>
+</html>

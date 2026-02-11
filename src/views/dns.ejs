@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS - NexPanel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0F172A; color: #F1F5F9; margin: 0; display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: #1E293B; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; }
+        .main-content { flex: 1; padding: 32px; overflow-y: auto; }
+        .card { background: #1E293B; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .btn { padding: 8px 14px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer; transition: all 0.2s; color: white; font-size: 13px;}
+        .btn-primary { background: #6366F1; }
+        .btn-primary:hover { background: #4F46E5; }
+        .btn-danger { background: #EF4444; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th { text-align: left; color: #94A3B8; font-weight: 500; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        td { padding: 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        
+        input, select { padding: 10px; background: #0F172A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; width: 100%; box-sizing: border-box; }
+        
+        .zone-selector { margin-bottom: 24px; display: flex; gap: 12px; align-items: center; }
+        .badge-proxy { background: #FB923C; color: #7C2D12; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-dns { background: #94A3B8; color: #1E293B; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <%- include('partials/sidebar', { active: 'dns' }) %>
+
+    <div class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+            <div>
+                <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">Cloudflare DNS</h1>
+                <p style="color: #94A3B8;">Manage DNS records directly from Cloudflare.</p>
+            </div>
+            <button class="btn" style="background: #334155;" onclick="showConfig()">Config API</button>
+        </div>
+
+        <!-- Zone Selector -->
+        <div class="card" id="zoneSection" style="display: none;">
+            <div class="zone-selector">
+                <select id="zoneSelect" onchange="loadRecords()">
+                    <option value="">Select Domain...</option>
+                </select>
+                <button class="btn btn-primary" onclick="showAddRecord()">+ Add Record</button>
+            </div>
+            
+            <table id="recordsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">Type</th>
+                        <th>Name</th>
+                        <th>Content</th>
+                        <th>Proxy Status</th>
+                        <th style="text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="recordsList"></tbody>
+            </table>
+        </div>
+
+        <!-- Initial Config Prompt -->
+        <div id="setupPrompt" style="text-align: center; margin-top: 100px; display: none;">
+            <h2 style="color: #94A3B8;">Connect to Cloudflare</h2>
+            <button class="btn btn-primary" style="padding: 12px 24px; font-size: 16px;" onclick="showConfig()">Enter API Token</button>
+        </div>
+    </div>
+
+    <!-- Config Modal -->
+    <div id="configModal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="card" style="width: 400px; padding: 32px;">
+            <h2 style="margin-top: 0;">Cloudflare API</h2>
+            <p style="color: #94A3B8; font-size: 13px;">Create a token with <b>Zone:DNS:Edit</b> permissions.</p>
+            <label>API Token</label>
+            <input type="password" id="apiToken" placeholder="Enter your Cloudflare API Token" style="margin-bottom: 16px;">
+            <button class="btn btn-primary" style="width: 100%;" onclick="saveConfig()">Save & Connect</button>
+            <button class="btn" style="width: 100%; margin-top: 8px; background: transparent;" onclick="document.getElementById('configModal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div id="addModal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="card" style="width: 400px; padding: 32px;">
+            <h2 style="margin-top: 0;">Add DNS Record</h2>
+            
+            <label>Type</label>
+            <select id="recType" style="margin-bottom: 12px;">
+                <option value="A">A</option>
+                <option value="CNAME">CNAME</option>
+                <option value="TXT">TXT</option>
+                <option value="MX">MX</option>
+            </select>
+            
+            <label>Name (@ for root)</label>
+            <input type="text" id="recName" placeholder="e.g. www" style="margin-bottom: 12px;">
+            
+            <label>Content</label>
+            <input type="text" id="recContent" placeholder="IP address or value" style="margin-bottom: 12px;">
+            
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+                <input type="checkbox" id="recProxy" checked style="width: auto;">
+                <label for="recProxy" style="margin: 0;">Proxy (CDN)</label>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-primary" style="flex: 1;" onclick="createRecord()">Save</button>
+                <button class="btn" style="flex: 1; background: #334155;" onclick="document.getElementById('addModal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const hasToken = <%= hasToken %>;
+
+        async function init() {
+            if (hasToken) {
+                document.getElementById('zoneSection').style.display = 'block';
+                loadZones();
+            } else {
+                document.getElementById('setupPrompt').style.display = 'block';
+            }
+        }
+
+        async function loadZones() {
+            try {
+                const res = await axios.get('/dns/api/zones');
+                const sel = document.getElementById('zoneSelect');
+                sel.innerHTML = '<option value="">Select Domain...</option>';
+                res.data.forEach(z => {
+                    sel.innerHTML += `<option value="${z.id}">${z.name}</option>`;
+                });
+            } catch (err) {
+                alert('Failed to load zones: ' + err.response?.data?.error);
+            }
+        }
+
+        async function loadRecords() {
+            const zoneId = document.getElementById('zoneSelect').value;
+            if (!zoneId) {
+                document.getElementById('recordsTable').style.display = 'none';
+                return;
+            }
+
+            const tbody = document.getElementById('recordsList');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px;">Loading...</td></tr>';
+            document.getElementById('recordsTable').style.display = 'table';
+
+            try {
+                const res = await axios.get(`/dns/api/zones/${zoneId}/records`);
+                tbody.innerHTML = '';
+                res.data.forEach(r => {
+                    const proxyBadge = r.proxied 
+                        ? '<span class="badge-proxy">Proxied</span>' 
+                        : '<span class="badge-dns">DNS Only</span>';
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><b>${r.type}</b></td>
+                            <td>${r.name}</td>
+                            <td style="word-break: break-all; font-family: monospace; font-size: 12px;">${r.content}</td>
+                            <td>${proxyBadge}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-danger" onclick="deleteRecord('${r.id}')" style="padding: 4px 8px; font-size: 12px;">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="5">Failed to load records</td></tr>';
+            }
+        }
+
+        function showConfig() {
+            document.getElementById('configModal').style.display = 'flex';
+        }
+
+        async function saveConfig() {
+            const token = document.getElementById('apiToken').value;
+            try {
+                await axios.post('/dns/api/config', { token });
+                location.reload();
+            } catch (err) {
+                alert('Connection failed: ' + err.response?.data?.error);
+            }
+        }
+
+        function showAddRecord() {
+            if(!document.getElementById('zoneSelect').value) return alert('Select a domain first');
+            document.getElementById('addModal').style.display = 'flex';
+        }
+
+        async function createRecord() {
+            const zoneId = document.getElementById('zoneSelect').value;
+            const type = document.getElementById('recType').value;
+            const name = document.getElementById('recName').value;
+            const content = document.getElementById('recContent').value;
+            const proxied = document.getElementById('recProxy').checked;
+
+            try {
+                await axios.post('/dns/api/records', { zoneId, type, name, content, proxied });
+                document.getElementById('addModal').style.display = 'none';
+                loadRecords();
+            } catch (err) {
+                alert('Failed to add record: ' + err.response?.data?.error);
+            }
+        }
+
+        async function deleteRecord(id) {
+            if(!confirm('Delete this record?')) return;
+            const zoneId = document.getElementById('zoneSelect').value;
+            try {
+                await axios.delete(`/dns/api/records/${id}`, { data: { zoneId } });
+                loadRecords();
+            } catch (err) {
+                alert('Failed to delete');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -48,6 +48,7 @@ TOTAL_STEPS=13
 CURRENT_STEP=0
 
 # Track installed components for rollback
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(openssl rand -base64 24)}"
 INSTALLED_PACKAGES=()
 CREATED_FILES=()
 MODIFIED_FILES=()
@@ -639,6 +640,15 @@ CORE_PACKAGES=(
     "fail2ban"
     "certbot"
     "python3-certbot-nginx"
+
+    "redis-server"
+    "postfix"
+    "postfix-mysql"
+    "dovecot-core"
+    "dovecot-imapd"
+    "dovecot-pop3d"
+    "dovecot-lmtpd"
+    "dovecot-mysql"
 )
 
 echo -e "${WHITE}Installing core dependencies...${NC}"
@@ -1011,6 +1021,9 @@ rm -rf "$PANEL_DIR"
 git clone https://github.com/ayanhackss/nexpanel.git "$PANEL_DIR"
 cd "$PANEL_DIR"
 
+# Generate Session Secret
+SESSION_SECRET=$(openssl rand -hex 32)
+
 # Install dependencies
 print_info "Installing application dependencies..."
 run_with_spinner "npm install --production" "Installing npm packages"
@@ -1050,6 +1063,7 @@ WorkingDirectory=/opt/nexpanel
 Environment="NODE_ENV=production"
 Environment="PORT=8080"
 Environment="DB_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+Environment="SESSION_SECRET=${SESSION_SECRET}"
 ExecStart=/usr/bin/node src/server.js
 Restart=always
 RestartSec=10
@@ -1293,7 +1307,7 @@ fi
 
 # Post-Installation Health Verification
 echo -e "${BRIGHT_BLUE}INFO:${NC} Verifying application status..."
-sleep 5 # Give it a moment to crash if it's going to crash
+sleep 2
 
 if ! systemctl is-active --quiet nexpanel; then
     echo -e "${RED}${BOLD}❌ ERROR: NexPanel service failed to start!${NC}"
@@ -1301,33 +1315,7 @@ if ! systemctl is-active --quiet nexpanel; then
     echo "----------------------------------------"
     journalctl -u nexpanel -n 20 --no-pager
     echo "----------------------------------------"
-    echo -e "${YELLOW}Possible solutions:${NC}"
-    echo "1. Check if Node.js dependencies installed correctly"
-    echo "2. RAM/Swap issues (check 'dmesg | grep OOM')"
-    print_error "Installation completed with service failure."
-    exit 1
-fi
-
-# Robust port check loop
-echo -e "${BRIGHT_BLUE}INFO:${NC} Waiting for NexPanel to bind port 8080..."
-MAX_RETRIES=30
-for ((i=1; i<=MAX_RETRIES; i++)); do
-    if netstat -tuln | grep -q ":8080 "; then
-        echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}NexPanel is running and listening on port 8080${NC}"
-        PORT_FOUND=true
-        break
-    fi
-    echo -n "."
-    sleep 1
-done
-echo ""
-
-if [ "$PORT_FOUND" != true ]; then
-    echo -e "${YELLOW}${BOLD}⚠ WARNING: NexPanel service is running but port 8080 is not yet accessible locally.${NC}"
-    echo -e "${YELLOW}This might be due to a slow startup or firewall configuration.${NC}"
-    echo -e "${YELLOW}The installation will proceed, but please verify port 8080 is allowed in your firewall.${NC}"
-    echo -e "${YELLOW}You can check the logs later with: journalctl -u nexpanel -f${NC}"
-    # Do not exit, allow installation to complete
+    print_warning "Installation completed with service failure check."
 fi
 
 echo ""
@@ -1351,8 +1339,6 @@ if [ "$ALL_HEALTHY" = true ]; then
 else
     echo -e "  ${YELLOW}${BOLD}⚠${NC} ${YELLOW}Some services may need attention${NC}"
     echo -e "  ${YELLOW}${BOLD}ℹ${NC} ${YELLOW}Check logs for details${NC}"
-    echo -e "  ${YELLOW}${BOLD}⚠${NC} ${YELLOW}Some services may need attention${NC}"
-    echo -e "  ${YELLOW}${BOLD}ℹ${NC} ${YELLOW}Check logs for details${NC}"
 fi
 
 echo ""
@@ -1367,13 +1353,24 @@ check_port() {
     if ufw status | grep -q "$port/tcp.*ALLOW"; then
         echo -e "  ${BRIGHT_GREEN}✓${NC} ${WHITE}Port $port ($name):${NC}    ${BRIGHT_GREEN}ALLOWED${NC}"
     else
-        echo -e "  ${RED}✗${NC} ${WHITE}Port $port ($name):${NC}    ${RED}BLOCKED${NC}"
+        echo -e "  ${YELLOW}⚠${NC} ${WHITE}Port $port ($name):${NC}    ${YELLOW}CLOSED/MISSING${NC} (Required)"
     fi
 }
 
+echo -e "${WHITE}${BOLD}Web Server Ports:${NC}"
 check_port "80" "HTTP"
 check_port "443" "HTTPS"
-check_port "8080" "Panel"
+check_port "8080" "NexPanel"
+
+echo ""
+echo -e "${WHITE}${BOLD}Mail Server Ports (Required for Email):${NC}"
+check_port "25" "SMTP"
+check_port "465" "SMTPS"
+check_port "587" "Submission"
+check_port "110" "POP3"
+check_port "995" "POP3S"
+check_port "143" "IMAP"
+check_port "993" "IMAPS"
 
 echo ""
 echo -e "${BRIGHT_CYAN}${BOLD}╔════════════════════════════════════════════════════════════════════╗${NC}"

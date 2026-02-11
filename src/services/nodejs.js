@@ -2,6 +2,14 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 
+// Helper to run commands as www-data
+const runAsUser = async (cmd) => {
+    // Escape single quotes for the shell command
+    const safeCmd = cmd.replace(/'/g, "'\\''");
+    // Run as www-data
+    return execAsync(`sudo -u www-data bash -c '${safeCmd}'`);
+};
+
 const start = async (website) => {
     const appPath = `/var/www/${website.name}`;
     const appName = website.name;
@@ -18,16 +26,16 @@ const start = async (website) => {
         const { stdout: pkgJsonContent } = await execAsync(`cat ${appPath}/package.json`);
         const pkgJson = JSON.parse(pkgJsonContent);
 
-        // Install dependencies if needed
-        await execAsync(`cd ${appPath} && npm install --production`);
+        // Install dependencies if needed (as www-data)
+        await runAsUser(`cd ${appPath} && npm install --production`);
 
         let startCommand;
         
-        // Priority 1: npm start (standard for Next.js, NestJS, etc.)
+        // Priority 1: npm start
         if (pkgJson.scripts && pkgJson.scripts.start) {
             startCommand = `npm start`;
         } 
-        // Priority 2: main file from package.json
+        // Priority 2: main file
         else if (pkgJson.main) {
             startCommand = pkgJson.main;
         }
@@ -46,18 +54,20 @@ const start = async (website) => {
         }
 
         if (!startCommand) {
-            throw new Error('No start script or entry file found (checked scripts.start, main, index.js, app.js, server.js)');
+            throw new Error('No start script or entry file found');
         }
 
-        // Start with PM2
-        // If it's an npm script, we run "npm run start"
-        // If it's a file, we run that file directly
-        const pm2Command = startCommand === 'npm start' 
+        // Start with PM2 as www-data
+        // We need to use full path to pm2 if not in www-data's path, or ensure environment is set
+        // Usually, if installed globally, `pm2` works.
+        // We set PM2_HOME to typical www-data location or default .pm2
+        
+        const pm2Cmd = startCommand === 'npm start' 
             ? `pm2 start npm --name ${appName} -- start`
             : `pm2 start ${appPath}/${startCommand} --name ${appName} -i 1 --max-memory-restart 256M`;
 
-        await execAsync(pm2Command);
-        await execAsync(`pm2 save`);
+        await runAsUser(`cd ${appPath} && ${pm2Cmd}`);
+        await runAsUser(`pm2 save`);
 
         return true;
     } catch (error) {
@@ -67,17 +77,19 @@ const start = async (website) => {
 
 const stop = async (website) => {
     try {
-        await execAsync(`pm2 delete ${website.name}`);
-        await execAsync(`pm2 save`);
+        await runAsUser(`pm2 delete ${website.name}`);
+        await runAsUser(`pm2 save`);
         return true;
     } catch (error) {
+        // Ignore if not found
+        if (error.message.includes('not found')) return true;
         throw new Error(`Failed to stop Node.js app: ${error.message}`);
     }
 };
 
 const restart = async (website) => {
     try {
-        await execAsync(`pm2 restart ${website.name}`);
+        await runAsUser(`pm2 restart ${website.name}`);
         return true;
     } catch (error) {
         throw new Error(`Failed to restart Node.js app: ${error.message}`);
@@ -86,7 +98,7 @@ const restart = async (website) => {
 
 const getLogs = async (website, lines = 100) => {
     try {
-        const { stdout } = await execAsync(`pm2 logs ${website.name} --lines ${lines} --nostream`);
+        const { stdout } = await runAsUser(`pm2 logs ${website.name} --lines ${lines} --nostream`);
         return stdout;
     } catch (error) {
         return '';

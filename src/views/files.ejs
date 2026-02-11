@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Manager - NexPanel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+        background: #0f172a;
+        color: #f1f5f9;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Header */
+      .header {
+        background: rgba(30, 41, 59, 0.8);
+        backdrop-filter: blur(10px);
+        padding: 16px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .back-btn {
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: color 0.2s;
+      }
+      .back-btn:hover {
+        color: #f1f5f9;
+      }
+
+      /* Main Layout */
+      .main {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+      }
+
+      /* Sidebar (future expansion) */
+      /* Content Area */
+      .file-browser {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 24px;
+        overflow: hidden;
+      }
+
+      /* Toolbar */
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 8px 16px;
+        background: #334155;
+        color: #f1f5f9;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+      }
+      .btn:hover {
+        background: #475569;
+      }
+      .btn-primary {
+        background: #6366f1;
+        border-color: transparent;
+      }
+      .btn-primary:hover {
+        background: #4f46e5;
+      }
+
+      /* Breadcrumbs */
+      .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 20px;
+        padding: 12px;
+        background: #1e293b;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #94a3b8;
+        overflow-x: auto;
+      }
+      .crumb {
+        cursor: pointer;
+        color: #94a3b8;
+        text-decoration: none;
+      }
+      .crumb:hover {
+        color: #f1f5f9;
+      }
+      .crumb.active {
+        color: #f1f5f9;
+        font-weight: 600;
+      }
+      .crumb-sep {
+        color: #475569;
+      }
+
+      /* File List */
+      .file-list-header {
+        display: grid;
+        grid-template-columns: auto 1fr 100px 180px 100px;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      .file-list-body {
+        flex: 1;
+        overflow-y: auto;
+        background: #1e293b;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .file-row {
+        display: grid;
+        grid-template-columns: auto 1fr 100px 180px 100px;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        align-items: center;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.1s;
+      }
+      .file-row:hover {
+        background: #334155;
+      }
+      .file-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 12px;
+        color: #94a3b8;
+      }
+      .file-name {
+        color: #f1f5f9;
+        font-weight: 500;
+      }
+      .file-size {
+        color: #94a3b8;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+      }
+      .file-date {
+        color: #64748b;
+        font-size: 13px;
+      }
+      .file-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .file-row:hover .file-actions {
+        opacity: 1;
+      }
+
+      .action-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+      }
+      .action-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #f1f5f9;
+      }
+      .action-btn.delete:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+      }
+
+      /* Editor Modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+      }
+      .modal {
+        background: #1e293b;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 1000px;
+        height: 85vh;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+      .modal-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-title {
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .editor-container {
+        flex: 1;
+        position: relative;
+        background: #0f172a;
+      }
+      #editor {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        color: #e2e8f0;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        padding: 20px;
+        border: none;
+        resize: none;
+        outline: none;
+      }
+      .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
+      /* Simple Modal */
+      .simple-modal {
+        max-width: 400px;
+        height: auto;
+      }
+      .input-group {
+        margin-bottom: 16px;
+      }
+      .input-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #94a3b8;
+      }
+      .input-group input {
+        width: 100%;
+        padding: 10px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        color: #f1f5f9;
+        outline: none;
+      }
+      .input-group input:focus {
+        border-color: #6366f1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="color: #6366f1"
+        >
+          <path
+            d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
+          />
+        </svg>
+        File Manager
+      </h1>
+      <a href="/dashboard" class="back-btn">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back to Dashboard
+      </a>
+    </div>
+
+    <div class="main">
+      <div class="file-browser">
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="showCreateModal('file')">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 4v16m8-8H4" />
+            </svg>
+            New File
+          </button>
+          <button class="btn" onclick="showCreateModal('folder')">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+              />
+              <line x1="12" y1="11" x2="12" y2="17" />
+              <line x1="9" y1="14" x2="15" y2="14" />
+            </svg>
+            New Folder
+          </button>
+          <button class="btn" onclick="refreshFiles()">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M23 4v6h-6" />
+              <path d="M1 20v-6h6" />
+              <path
+                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+              />
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        <div class="breadcrumbs" id="breadcrumbs">
+          <!-- Injected via JS -->
+        </div>
+
+        <div class="file-list-header">
+          <div style="width: 20px"></div>
+          <div>Name</div>
+          <div>Size</div>
+          <div>Modified</div>
+          <div style="text-align: right">Actions</div>
+        </div>
+
+        <div class="file-list-body" id="fileList">
+          <!-- Files injected here -->
+          <div style="padding: 20px; text-align: center; color: #94a3b8">
+            Loading...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor Modal -->
+    <div class="modal-overlay" id="editorModal">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title" id="editorFileName">filename.txt</span>
+          <button class="action-btn" onclick="closeEditor()">✕</button>
+        </div>
+        <div class="editor-container">
+          <textarea id="editor" spellcheck="false"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeEditor()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveFile()">
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Modal (File/Folder) -->
+    <div class="modal-overlay" id="createModal">
+      <div class="modal simple-modal">
+        <div class="modal-header">
+          <span class="modal-title" id="createModalTitle">New Item</span>
+          <button class="action-btn" onclick="closeCreateModal()">✕</button>
+        </div>
+        <div style="padding: 24px">
+          <div class="input-group">
+            <label>Name</label>
+            <input type="text" id="newItemName" placeholder="Enter name..." />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeCreateModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitCreate()">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentPath = "";
+      let currentEditingFile = null;
+      let createType = "file";
+
+      // Initial Load
+      document.addEventListener("DOMContentLoaded", () => {
+        loadFiles("");
+      });
+
+      async function loadFiles(path) {
+        currentPath = path;
+        renderBreadcrumbs(path);
+
+        const listEl = document.getElementById("fileList");
+        listEl.innerHTML =
+          '<div style="padding: 20px; text-align: center; color: #94A3B8;">Loading...</div>';
+
+        try {
+          const res = await fetch(
+            `/files/api/list?path=${encodeURIComponent(path)}`,
+          );
+          const files = await res.json();
+
+          if (files.error) throw new Error(files.error);
+
+          renderFiles(files);
+        } catch (err) {
+          listEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #EF4444;">Error: ${err.message}</div>`;
+        }
+      }
+
+      function renderFiles(files) {
+        const listEl = document.getElementById("fileList");
+        listEl.innerHTML = "";
+
+        if (files.length === 0) {
+          listEl.innerHTML =
+            '<div style="padding: 20px; text-align: center; color: #94A3B8;">This folder is empty</div>';
+          return;
+        }
+
+        files.forEach((file) => {
+          const row = document.createElement("div");
+          row.className = "file-row";
+          row.onclick = (e) => {
+            if (e.target.closest(".action-btn")) return;
+            if (file.type === "directory") {
+              loadFiles(file.path);
+            } else {
+              editFile(file.path);
+            }
+          };
+
+          const icon =
+            file.type === "directory"
+              ? '<svg class="file-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>'
+              : '<svg class="file-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+
+          const size = file.type === "directory" ? "-" : formatBytes(file.size);
+          const date = new Date(file.last_modified).toLocaleDateString();
+
+          row.innerHTML = `
+                    <div>${icon}</div>
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${size}</div>
+                    <div class="file-date">${date}</div>
+                    <div class="file-actions">
+                        <button class="action-btn delete" onclick="deleteItem('${file.path}')" title="Delete">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </div>
+                `;
+          listEl.appendChild(row);
+        });
+      }
+
+      function renderBreadcrumbs(path) {
+        const el = document.getElementById("breadcrumbs");
+        const parts = path ? path.split("/") : [];
+
+        let html = `<a href="#" class="crumb ${parts.length === 0 ? "active" : ""}" onclick="loadFiles('')">Root</a>`;
+
+        let currentPathBuild = "";
+        parts.forEach((part, index) => {
+          if (!part) return;
+          currentPathBuild += (currentPathBuild ? "/" : "") + part;
+          const isLast = index === parts.length - 1;
+          html += ` <span class="crumb-sep">/</span> <a href="#" class="crumb ${isLast ? "active" : ""}" onclick="loadFiles('${currentPathBuild}')">${part}</a>`;
+        });
+
+        el.innerHTML = html;
+      }
+
+      // Editor Functions
+      async function editFile(path) {
+        currentEditingFile = path;
+        document.getElementById("editorFileName").textContent = path
+          .split("/")
+          .pop();
+        const modal = document.getElementById("editorModal");
+        const editor = document.getElementById("editor");
+
+        editor.value = "Loading...";
+        modal.style.display = "flex";
+
+        try {
+          const res = await fetch(
+            `/files/api/content?path=${encodeURIComponent(path)}`,
+          );
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          editor.value = data.content;
+        } catch (err) {
+          alert("Failed to load file: " + err.message);
+          closeEditor();
+        }
+      }
+
+      async function saveFile() {
+        if (!currentEditingFile) return;
+        const content = document.getElementById("editor").value;
+
+        try {
+          const res = await fetch("/files/api/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: currentEditingFile, content }),
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          alert("File saved!");
+          closeEditor();
+          loadFiles(currentPath); // Refresh
+        } catch (err) {
+          alert("Error saving file: " + err.message);
+        }
+      }
+
+      function closeEditor() {
+        document.getElementById("editorModal").style.display = "none";
+        currentEditingFile = null;
+      }
+
+      // Create Functions
+      function showCreateModal(type) {
+        createType = type;
+        document.getElementById("createModalTitle").textContent =
+          type === "file" ? "New File" : "New Folder";
+        document.getElementById("newItemName").value = "";
+        document.getElementById("createModal").style.display = "flex";
+        document.getElementById("newItemName").focus();
+      }
+
+      function closeCreateModal() {
+        document.getElementById("createModal").style.display = "none";
+      }
+
+      async function submitCreate() {
+        const name = document.getElementById("newItemName").value.trim();
+        if (!name) return;
+
+        const fullPath = currentPath ? `${currentPath}/${name}` : name;
+        const endpoint =
+          createType === "file"
+            ? "/files/api/create-file"
+            : "/files/api/create-folder";
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: fullPath }),
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          closeCreateModal();
+          loadFiles(currentPath);
+        } catch (err) {
+          alert(`Error creating ${createType}: ${err.message}`);
+        }
+      }
+
+      // Delete Function
+      async function deleteItem(path) {
+        if (!confirm(`Are you sure you want to delete "${path}"?`)) return;
+
+        try {
+          const res = await fetch("/files/api/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path }),
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          loadFiles(currentPath);
+        } catch (err) {
+          alert("Error deleting item: " + err.message);
+        }
+      }
+
+      function refreshFiles() {
+        loadFiles(currentPath);
+      }
+
+      function formatBytes(bytes, decimals = 2) {
+        if (!+bytes) return "0 Bytes";
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+      }
+    </script>
+  </body>
+</html>

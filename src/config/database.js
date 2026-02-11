@@ -62,6 +62,15 @@ const initSqlite = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS databases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      website_id INTEGER,
+      name TEXT UNIQUE NOT NULL,
+      username TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (website_id) REFERENCES websites(id)
+    );
+
     CREATE TABLE IF NOT EXISTS backups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       website_id INTEGER,
@@ -138,6 +147,25 @@ const initSqlite = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  
+    // Migration for Webhooks (add secret, etc)
+    try {
+        sqliteDb.prepare("ALTER TABLE webhooks ADD COLUMN secret TEXT").run();
+        sqliteDb.prepare("ALTER TABLE webhooks ADD COLUMN last_triggered DATETIME").run();
+        sqliteDb.prepare("ALTER TABLE webhooks ADD COLUMN last_status TEXT").run();
+    } catch (e) {
+        // Ignore if columns exist
+    }
+
+    // Settings table
+    sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
 };
 
 initSqlite();

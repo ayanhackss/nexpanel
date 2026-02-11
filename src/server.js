@@ -7,7 +7,8 @@ fastify.register(require('@fastify/helmet'), {
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", 'data:'],
       // Allow frame embedding for now if necessary, or keep restriction
@@ -21,7 +22,7 @@ fastify.register(require('@fastify/helmet'), {
 // CSRF Protection
 fastify.register(require('@fastify/csrf-protection'), {
   cookieOpts: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // process.env.NODE_ENV === 'production',
     httpOnly: true
   }
 });
@@ -40,7 +41,7 @@ fastify.register(require('@fastify/cookie'));
 fastify.register(require('@fastify/session'), {
   secret: process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? require('crypto').randomBytes(64).toString('hex') : 'change-this-secret-in-production-min-32-chars-long'),
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 1800000 // 30 minutes
   }
@@ -79,6 +80,8 @@ fastify.register(require('./routes/email'), { prefix: '/api/email' });
 fastify.register(require('./routes/staging'), { prefix: '/api/staging' });
 fastify.register(require('./routes/health'), { prefix: '/health' });
 fastify.register(require('./routes/system'), { prefix: '/api/system' });
+    fastify.register(require('./routes/dns'), { prefix: '/dns' });
+    fastify.register(require('./routes/php_extensions'), { prefix: '/api/php' }); 
 
 // Dashboard route
 fastify.get('/', async (request, reply) => {

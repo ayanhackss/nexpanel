@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSL Manager - NexPanel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        /* Reusing consistent styles */
+        body { font-family: 'Inter', sans-serif; background: #0F172A; color: #F1F5F9; margin: 0; display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: #1E293B; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; }
+        .main-content { flex: 1; padding: 32px; overflow-y: auto; }
+        
+        .card { background: #1E293B; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .btn { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 500; cursor: pointer; transition: all 0.2s; color: white; }
+        .btn-primary { background: #6366F1; }
+        .btn-primary:hover { background: #4F46E5; }
+        .btn-danger { background: #EF4444; }
+        .btn-danger:hover { background: #DC2626; }
+
+        input { width: 100%; padding: 10px; background: #0F172A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; color: #94A3B8; font-size: 14px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: #94A3B8; font-weight: 500; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        td { padding: 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .status-valid { background: rgba(16, 185, 129, 0.1); color: #34D399; }
+        .status-expired { background: rgba(239, 68, 68, 0.1); color: #F87171; }
+    </style>
+</head>
+<body>
+    <%- include('partials/sidebar', { active: 'ssl' }) %>
+
+    <div class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+            <div>
+                <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">SSL Certificates</h1>
+                <p style="color: #94A3B8;">Manage HTTPS for your websites using Let's Encrypt.</p>
+            </div>
+            <button onclick="document.getElementById('generateModal').style.display='flex'" class="btn btn-primary">
+                + New Certificate
+            </button>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Domains</th>
+                        <th>Expiry</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="certList">
+                    <tr><td colspan="5" style="text-align: center; color: #94A3B8;">Loading certificates...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Generate Modal -->
+    <div id="generateModal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="card" style="width: 400px; padding: 32px;">
+            <h2 style="margin-top: 0;">New SSL Certificate</h2>
+            
+            <label>Domain Name</label>
+            <input type="text" id="domainInput" placeholder="example.com">
+            
+            <label>Email Address (for renewal)</label>
+            <input type="email" id="emailInput" placeholder="admin@example.com">
+
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="btn btn-primary" onclick="generateSSL()" style="flex: 1;">Generate SSL</button>
+                <button class="btn" onclick="document.getElementById('generateModal').style.display='none'" style="background: #334155; flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadCerts() {
+            try {
+                const res = await axios.get('/api/ssl/list');
+                const tbody = document.getElementById('certList');
+                tbody.innerHTML = '';
+                
+                if (res.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94A3B8; padding: 32px;">No active certificates found.</td></tr>';
+                    return;
+                }
+
+                res.data.forEach(cert => {
+                    const daysLeft = getDaysLeft(cert.expiry);
+                    const statusClass = daysLeft > 0 ? 'status-valid' : 'status-expired';
+                    const statusText = daysLeft > 0 ? `Valid (${daysLeft} days)` : 'Expired';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="font-weight: 500;">${cert.name}</td>
+                            <td style="color: #94A3B8;">${cert.domains.join(', ')}</td>
+                            <td>${cert.expiry}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-danger" onclick="revokeCert('${cert.name}')" style="padding: 6px 12px; font-size: 13px;">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load certificates');
+            }
+        }
+
+        async function generateSSL() {
+            const domain = document.getElementById('domainInput').value;
+            const email = document.getElementById('emailInput').value;
+            const btn = document.querySelector('#generateModal .btn-primary');
+
+            if(!domain || !email) return alert('Please fill all fields');
+            
+            btn.innerText = 'Generating... (Takes ~30s)';
+            btn.disabled = true;
+
+            try {
+                await axios.post('/api/ssl/generate', { domain, email });
+                alert('Certificate generated successfully!');
+                document.getElementById('generateModal').style.display = 'none';
+                loadCerts();
+            } catch (err) {
+                alert(err.response?.data?.error || 'Generation failed. Make sure domain points to this server IP.');
+            } finally {
+                btn.innerText = 'Generate SSL';
+                btn.disabled = false;
+            }
+        }
+
+        async function revokeCert(name) {
+            if(!confirm(`Are you sure you want to revoke/delete the certificate for ${name}? This will disable HTTPS for the site.`)) return;
+
+            try {
+                await axios.post('/api/ssl/revoke', { certName: name });
+                loadCerts();
+            } catch (err) {
+                alert('Failed to revoke certificate');
+            }
+        }
+
+        function getDaysLeft(expiryStr) {
+            // expiryStr format: 2024-05-15 (for example)
+            const expiry = new Date(expiryStr);
+            const now = new Date();
+            const diffTime = expiry - now;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        }
+
+        loadCerts();
+    </script>
+</body>
+</html>

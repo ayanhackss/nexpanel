@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One-Click Apps - NexPanel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0F172A; color: #F1F5F9; margin: 0; display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: #1E293B; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; }
+        .main-content { flex: 1; padding: 32px; overflow-y: auto; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 24px; }
+        .app-card { background: #1E293B; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; text-align: center; transition: all 0.2s; }
+        .app-card:hover { transform: translateY(-2px); border-color: #6366F1; }
+        
+        .app-icon { width: 64px; height: 64px; background: #334155; border-radius: 16px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; }
+        .app-name { font-weight: 600; font-size: 18px; margin-bottom: 8px; }
+        .app-version { color: #94A3B8; font-size: 13px; margin-bottom: 20px; }
+        
+        .btn { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 500; cursor: pointer; width: 100%; color: white;}
+        .btn-primary { background: #6366F1; }
+        .btn-primary:hover { background: #4F46E5; }
+
+        select { width: 100%; padding: 10px; background: #0F172A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <%- include('partials/sidebar', { active: 'apps' }) %>
+
+    <div class="main-content">
+        <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">One-Click Apps</h1>
+        <p style="color: #94A3B8; margin-bottom: 32px;">Deploy popular applications in seconds.</p>
+
+        <div class="grid">
+            <% apps.forEach(app => { %>
+                <div class="app-card">
+                    <div class="app-icon" style="background: #21759b;">W</div>
+                    <div class="app-name"><%= app.name %></div>
+                    <div class="app-version">v<%= app.version %></div>
+                    <button class="btn btn-primary" onclick="openInstallModal('<%= app.id %>', '<%= app.name %>')">Install</button>
+                </div>
+            <% }); %>
+            
+            <!-- Future apps placeholders -->
+            <div class="app-card" style="opacity: 0.5;">
+                <div class="app-icon" style="background: #334155;">L</div>
+                <div class="app-name">Laravel</div>
+                <div class="app-version">Coming Soon</div>
+                <button class="btn" style="background: #334155; cursor: not-allowed;">Install</button>
+            </div>
+            <div class="app-card" style="opacity: 0.5;">
+                <div class="app-icon" style="background: #334155;">N</div>
+                <div class="app-name">Next.js</div>
+                <div class="app-version">Coming Soon</div>
+                <button class="btn" style="background: #334155; cursor: not-allowed;">Install</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Install Modal -->
+    <div id="installModal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="app-card" style="width: 400px; padding: 32px; text-align: left;">
+            <h2 style="margin-top: 0;">Install <span id="modalAppName">App</span></h2>
+            
+            <label>Select Website</label>
+            <select id="websiteSelect">
+                <% websites.forEach(w => { %>
+                    <option value="<%= w.id %>"><%= w.name %> (<%= w.domain %>)</option>
+                <% }); %>
+            </select>
+            <p style="font-size: 12px; color: #F87171; margin-top: -12px; margin-bottom: 20px;">
+                Warning: This will overwrite files in the selected website's directory.
+            </p>
+
+            <div style="display: flex; gap: 12px;">
+                <button id="installBtn" class="btn btn-primary" onclick="installApp()">Install Now</button>
+                <button class="btn" onclick="document.getElementById('installModal').style.display='none'" style="background: #334155;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedAppId = '';
+
+        function openInstallModal(appId, appName) {
+            selectedAppId = appId;
+            document.getElementById('modalAppName').textContent = appName;
+            document.getElementById('installModal').style.display = 'flex';
+        }
+
+        async function installApp() {
+            const websiteId = document.getElementById('websiteSelect').value;
+            if(!websiteId) return alert('Please select a website');
+
+            const btn = document.getElementById('installBtn');
+            btn.innerText = 'Installing...';
+            btn.disabled = true;
+
+            try {
+                const res = await axios.post('/apps/api/install', { app: selectedAppId, website_id: websiteId });
+                alert(`Success! \n\nDatabase: ${res.data.details.dbName}\nUser: ${res.data.details.dbUser}\nPass: ${res.data.details.dbPass}\n\nVisit ${res.data.details.url} to finish installation.`);
+                document.getElementById('installModal').style.display = 'none';
+            } catch (err) {
+                alert('Installation failed: ' + (err.response?.data?.error || err.message));
+            } finally {
+                btn.innerText = 'Install Now';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
