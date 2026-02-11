@@ -766,6 +766,9 @@ else
              print_warning "Detailed Fix: Found orphaned configuration."
              print_info "Backing up old config to /etc/mysql.bak.$(date +%s)..."
              mv /etc/mysql "/etc/mysql.bak.$(date +%s)"
+             # Critical: If we move config, we MUST reinstall common package to regenerate it
+             print_info "Purging residual MariaDB packages to ensure config regeneration..."
+             DEBIAN_FRONTEND=noninteractive apt-get purge -y mariadb-common mysql-common >/dev/null 2>&1 || true
         fi
     fi
 
@@ -782,7 +785,13 @@ else
     dpkg --configure -a >/dev/null 2>&1 || true
 
     # Now run the install cleanly
-    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends mariadb-server mariadb-client" "Installing MariaDB"
+    # Now run the install cleanly (reinstall to ensure configs)
+    run_with_spinner "DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall -qq --no-install-recommends mariadb-server mariadb-client mariadb-common" "Installing MariaDB"
+    
+    # Unmask incase it was masked by a previous remove
+    systemctl unmask mariadb >/dev/null 2>&1 || true
+    
+    # Try to start
     run_with_spinner "systemctl enable --now mariadb" "Starting MariaDB"
 fi
 
