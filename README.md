@@ -37,7 +37,7 @@ A production-ready, lightweight hosting control panel for modern hosting managem
 
 ## 📋 Requirements
 
-- **OS**: Ubuntu 20.04 or 22.04 LTS
+- **OS**: Ubuntu 22.04 LTS or 24.04 LTS
 - **Root Access**: Required for installation
 
 ## 🔧 Installation
@@ -170,9 +170,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uni
 **✨ Features:**
 
 - 🎨 Beautiful modern UI matching the installer
-- ⚡ Fast and safe execution
+- ⚡ **Scorched Earth Mode**: Completely removes all traces (Apps, Database, Users)
 - 🛡️ Confirmation before destruction
-- 🧹 Optional cleanup of data and databases
+- 🧹 Smart dependency cleanup (removes unused packages)
+- 🔧 **Force Kill**: Automatically handles stuck services
+- 🗑️ Optional cleanup of data and databases
 
 ## 📚 Documentation
 
@@ -196,6 +198,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ayanhackss/nexpanel/main/uni
 ### Service Control
 
 ```bash
+# View Login Credentials (New!)
+nexpanel-auth
+
 # Panel service
 systemctl status nexpanel
 systemctl restart nexpanel
