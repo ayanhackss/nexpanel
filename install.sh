@@ -791,8 +791,31 @@ else
     # Unmask incase it was masked by a previous remove
     systemctl unmask mariadb >/dev/null 2>&1 || true
     
-    # Try to start
-    run_with_spinner "systemctl enable --now mariadb" "Starting MariaDB"
+    # Try to start with retry logic
+    if ! run_with_spinner "systemctl enable --now mariadb" "Starting MariaDB"; then
+        print_warning "First attempt failed. Checking common issues..."
+        
+        # Fix 1: Directory permissions (Common issue)
+        mkdir -p /var/run/mysqld
+        chown mysql:mysql /var/run/mysqld
+        chmod 755 /var/run/mysqld
+        
+        # Fix 2: Timeout increase
+        mkdir -p /etc/systemd/system/mariadb.service.d
+        echo -e "[Service]\nTimeoutStartSec=300" > /etc/systemd/system/mariadb.service.d/timeout.conf
+        systemctl daemon-reload >/dev/null 2>&1 || true
+
+        print_info "Retrying startup..."
+        if ! run_with_spinner "systemctl restart mariadb" "Starting MariaDB (Attempt 2)"; then
+             print_error "MariaDB failed to start again."
+             echo -e "${YELLOW}---------------------------------------------------${NC}"
+             echo -e "${RED}FATAL ERROR: MariaDB Service Logs${NC}"
+             echo -e "${YELLOW}---------------------------------------------------${NC}"
+             journalctl -xeu mariadb --no-pager | tail -n 20
+             echo -e "${YELLOW}---------------------------------------------------${NC}"
+             exit 1
+        fi
+    fi
 fi
 
 # Secure MariaDB
