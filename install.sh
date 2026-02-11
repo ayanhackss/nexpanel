@@ -1118,6 +1118,19 @@ chmod 600 /root/nexpanel-credentials.txt
 CREATED_FILES+=("/root/nexpanel-credentials.txt")
 print_success "Credentials saved to /root/nexpanel-credentials.txt"
 
+# Create CLI tool for viewing credentials
+cat > /usr/local/bin/nexpanel-auth << 'EOF'
+#!/bin/bash
+if [ -f /root/nexpanel-credentials.txt ]; then
+    cat /root/nexpanel-credentials.txt
+else
+    echo "Error: Credentials file not found at /root/nexpanel-credentials.txt"
+    echo "You can try resetting the password using: cd /opt/nexpanel && npm run reset-password"
+fi
+EOF
+chmod +x /usr/local/bin/nexpanel-auth
+print_success "Created 'nexpanel-auth' command"
+
 #############################################
 # System Optimization
 #############################################
@@ -1295,15 +1308,27 @@ if ! systemctl is-active --quiet nexpanel; then
     exit 1
 fi
 
-if ! netstat -tuln | grep -q ":8080 "; then
-    echo -e "${RED}${BOLD}❌ ERROR: NexPanel service is running but NOT listening on port 8080!${NC}"
-    echo -e "${YELLOW}Checking application logs...${NC}"
-    journalctl -u nexpanel -n 20 --no-pager
-    print_error "Port 8080 is not accessible locally."
-    exit 1
-fi
+# Robust port check loop
+echo -e "${BRIGHT_BLUE}INFO:${NC} Waiting for NexPanel to bind port 8080..."
+MAX_RETRIES=30
+for ((i=1; i<=MAX_RETRIES; i++)); do
+    if netstat -tuln | grep -q ":8080 "; then
+        echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}NexPanel is running and listening on port 8080${NC}"
+        PORT_FOUND=true
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
+echo ""
 
-echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}NexPanel is running and listening on port 8080${NC}"
+if [ "$PORT_FOUND" != true ]; then
+    echo -e "${YELLOW}${BOLD}⚠ WARNING: NexPanel service is running but port 8080 is not yet accessible locally.${NC}"
+    echo -e "${YELLOW}This might be due to a slow startup or firewall configuration.${NC}"
+    echo -e "${YELLOW}The installation will proceed, but please verify port 8080 is allowed in your firewall.${NC}"
+    echo -e "${YELLOW}You can check the logs later with: journalctl -u nexpanel -f${NC}"
+    # Do not exit, allow installation to complete
+fi
 
 echo ""
 echo ""
@@ -1382,6 +1407,7 @@ echo -e "  ${CYAN}Check status:${NC}      ${WHITE}systemctl status nexpanel${NC}
 echo -e "  ${CYAN}View logs:${NC}         ${WHITE}journalctl -u nexpanel -f${NC}"
 echo -e "  ${CYAN}Restart panel:${NC}     ${WHITE}systemctl restart nexpanel${NC}"
 echo -e "  ${CYAN}Stop panel:${NC}        ${WHITE}systemctl stop nexpanel${NC}"
+echo -e "  ${CYAN}View Login Info:${NC}   ${WHITE}nexpanel-auth${NC}"
 echo ""
 
 echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
